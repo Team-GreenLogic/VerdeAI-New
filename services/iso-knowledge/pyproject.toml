@@ -9,10 +9,7 @@ description = "VerdeAI ISO Knowledge worker"
 requires-python = ">=3.12"
 dependencies = [
     "verdeai-shared",
-    "dramatiq[rabbitmq]~=1.17",
-    "tavily-python~=0.5",
     "motor~=3.6",
-    "aio-pika~=9.4",
 ]
 
 [tool.hatch.build.targets.wheel]

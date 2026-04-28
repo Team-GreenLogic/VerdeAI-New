@@ -1,10 +1,12 @@
-"""CLI entrypoint — invoked by tooling/seed_iso.py and `make seed-iso`.
-
-Full implementation in Phase 4.
-"""
+"""CLI entrypoint — `python -m app.cli seed`."""
 
 import argparse
+import asyncio
+
 from loguru import logger
+
+from app.config import settings
+from app.seed_iso import run_seed
 
 
 def main() -> None:
@@ -14,7 +16,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "seed":
-        logger.info("Seed command — implemented in Phase 4")
+        asyncio.run(run_seed(demo_tenant_id=settings.DEMO_TENANT_ID))
     else:
         parser.print_help()
 
