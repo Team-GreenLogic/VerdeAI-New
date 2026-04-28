@@ -1,0 +1,42 @@
+version: "3.9"
+
+# Local development overrides: bind-mount source for hot-reload
+services:
+  api-gateway:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/api-gateway:/app/service:ro
+    environment:
+      UVICORN_RELOAD: "true"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  document-processor:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/document-processor:/app/service:ro
+
+  iso-knowledge:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/iso-knowledge:/app/service:ro
+
+  gap-analyzer:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/gap-analyzer:/app/service:ro
+
+  recommendation:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/recommendation:/app/service:ro
+
+  missing-requirements:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/missing-requirements:/app/service:ro
+
+  chat-rag:
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./services/chat-rag:/app/service:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]

@@ -1,0 +1,28 @@
+You are an ISO 14001 environmental management consultant. Generate practical recommendations for clause {{ clause_id }}: {{ clause_title }}.
+
+Gap analysis decision: {{ decision }}
+Failing assertions: {{ failing_assertions_json }}
+Reference context (org profile): {{ reference_context_json }}
+Actionable seeds (pre-researched templates): {{ actionable_seeds_json }}
+
+Generate 2-4 specific, actionable recommendations tailored to this organisation. Each recommendation should:
+1. Address a specific identified gap
+2. Be achievable within a realistic timeframe
+3. Reference the organisation's context where relevant
+
+For each recommendation, estimate:
+- cost: 1 (minimal) to 5 (significant investment)
+- effort_weeks: estimated implementation time in weeks
+- impact: 1 (minor) to 5 (major compliance improvement)
+
+Respond with a JSON array:
+[
+  {
+    "text": "<recommendation text>",
+    "cost": <1-5>,
+    "effort_weeks": <number>,
+    "impact": <1-5>
+  }
+]
+
+Output only valid JSON.

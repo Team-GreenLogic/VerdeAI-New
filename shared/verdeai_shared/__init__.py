@@ -1,0 +1,1 @@
+"""VerdeAI shared library."""

@@ -1,0 +1,202 @@
+{
+  "organization": {
+    "name": "GreenTech Manufacturing Ltd",
+    "industry": "Electronics Manufacturing",
+    "size": "250-500 employees",
+    "location": "Birmingham, UK",
+    "sites": ["Birmingham Main Plant", "Sheffield Distribution Centre"],
+    "primary_activities": [
+      "PCB assembly",
+      "Electronic component manufacturing",
+      "Product testing and QA",
+      "Warehousing and distribution"
+    ]
+  },
+  "environmental_policy": {
+    "exists": true,
+    "document_name": "Environmental Policy Statement v2.3",
+    "last_reviewed": "2024-03-15",
+    "approved_by": "CEO — Sarah Mitchell",
+    "communicated_to_employees": true,
+    "publicly_available": true,
+    "commitments": [
+      "Commitment to compliance with applicable environmental legislation",
+      "Commitment to continual improvement of environmental performance",
+      "Commitment to prevention of pollution",
+      "Commitment to sustainable resource use"
+    ],
+    "missing_elements": []
+  },
+  "context_and_scope": {
+    "ems_scope_defined": true,
+    "scope_description": "Design, manufacture, assembly and distribution of electronic components and PCBs at Birmingham Main Plant and Sheffield Distribution Centre",
+    "interested_parties_identified": true,
+    "interested_parties": [
+      {"party": "Regulatory authorities (Environment Agency)", "requirements": "Compliance with environmental permits and legislation"},
+      {"party": "Customers", "requirements": "Environmentally responsible products and processes"},
+      {"party": "Local community", "requirements": "Minimised noise, emissions and waste impacts"},
+      {"party": "Employees", "requirements": "Safe and healthy working environment"}
+    ],
+    "internal_external_issues_documented": false,
+    "notes": "SWOT analysis initiated but not formally documented. Internal/external issues register not yet created."
+  },
+  "leadership": {
+    "top_management_commitment_demonstrated": true,
+    "environmental_roles_defined": true,
+    "roles": [
+      {
+        "role": "Environmental Manager",
+        "name": "James Thornton",
+        "responsibilities": "Overall EMS coordination, audit programme, regulatory compliance monitoring"
+      },
+      {
+        "role": "Site Operations Manager",
+        "name": "Linda Osei",
+        "responsibilities": "Operational controls implementation, emergency response"
+      },
+      {
+        "role": "CEO",
+        "name": "Sarah Mitchell",
+        "responsibilities": "Top management commitment, policy approval, management review"
+      }
+    ],
+    "management_review_conducted": true,
+    "last_management_review": "2024-01-20",
+    "review_frequency": "Annual"
+  },
+  "planning": {
+    "environmental_aspects_identified": true,
+    "significant_aspects": [
+      {"aspect": "Energy consumption (electricity)", "impact": "Climate change / carbon emissions", "significance": "High"},
+      {"aspect": "Hazardous waste (solder flux, chemical solvents)", "impact": "Soil and water contamination", "significance": "High"},
+      {"aspect": "Packaging waste", "impact": "Landfill / resource depletion", "significance": "Medium"},
+      {"aspect": "Water use (cooling systems)", "impact": "Water scarcity", "significance": "Low"}
+    ],
+    "legal_requirements_register": true,
+    "legal_register_last_updated": "2024-02-28",
+    "compliance_evaluation_conducted": true,
+    "last_compliance_evaluation": "2024-02-28",
+    "objectives_and_targets": [
+      {
+        "objective": "Reduce electricity consumption by 15% by end of 2025",
+        "target": "15% reduction vs 2022 baseline",
+        "progress": "8% achieved as of Q3 2024"
+      },
+      {
+        "objective": "Eliminate single-use plastics in packaging",
+        "target": "100% recyclable packaging by 2025",
+        "progress": "65% achieved"
+      }
+    ],
+    "action_plans_for_objectives": true,
+    "risks_and_opportunities_assessed": false,
+    "notes": "Formal risk and opportunity assessment not completed. Partial risk register exists in spreadsheet form but has not been formally approved or linked to EMS."
+  },
+  "support": {
+    "resources_allocated": true,
+    "competence": {
+      "training_program_exists": true,
+      "training_records_maintained": true,
+      "environmental_awareness_training": true,
+      "last_awareness_training": "2024-04-10",
+      "role_specific_training": [
+        {"role": "Environmental Manager", "training": "ISO 14001 Lead Auditor, IEMA Foundation"},
+        {"role": "Site Operations Manager", "training": "Environmental awareness, Emergency response"},
+        {"role": "Production staff", "training": "Environmental awareness, Waste segregation"}
+      ]
+    },
+    "communication": {
+      "internal_communication_process": true,
+      "external_communication_process": false,
+      "notes": "External communication policy not formally defined. No documented process for responding to external environmental enquiries or complaints."
+    },
+    "documented_information": {
+      "document_control_procedure": true,
+      "records_retention_defined": true,
+      "documents_version_controlled": true
+    }
+  },
+  "operations": {
+    "operational_controls": [
+      {"process": "Soldering and flux application", "control": "Local exhaust ventilation + PPE + SOP-OPS-001", "documented": true},
+      {"process": "Chemical storage and handling", "control": "COSHH assessments, locked chemical store, spill kits", "documented": true},
+      {"process": "Waste segregation", "control": "Colour-coded bins, contractor collection manifests", "documented": true},
+      {"process": "Energy management", "control": "Sub-metering installed but monitoring procedure not yet documented", "documented": false}
+    ],
+    "emergency_preparedness": {
+      "emergency_procedures_exist": true,
+      "procedures_cover": [
+        "Chemical spill response",
+        "Fire emergency",
+        "Flood (Sheffield site — near River Don)"
+      ],
+      "emergency_drills_conducted": true,
+      "last_drill": "2024-05-01",
+      "drill_frequency": "Annual",
+      "gaps": [
+        "No procedure for gas leak / VOC release at Birmingham site",
+        "Sheffield flood procedure not updated since 2021"
+      ]
+    },
+    "outsourced_processes_controlled": false,
+    "notes": "Contract manufacturer in Poland handles sub-assembly. No environmental requirements specified in the contract. No audit of outsourced supplier environmental performance conducted."
+  },
+  "performance_evaluation": {
+    "monitoring_and_measurement": {
+      "parameters_monitored": [
+        {"parameter": "Electricity consumption (kWh)", "frequency": "Monthly", "method": "Utility bill + sub-metering"},
+        {"parameter": "Hazardous waste generated (kg)", "frequency": "Quarterly", "method": "Waste transfer notes"},
+        {"parameter": "Water consumption (m³)", "frequency": "Monthly", "method": "Utility bill"}
+      ],
+      "equipment_calibrated": true,
+      "emissions_monitored": false,
+      "notes": "VOC emissions from soldering processes not monitored. No stack emission measurements conducted. This is a known gap identified in the last compliance review."
+    },
+    "internal_audit": {
+      "audit_program_exists": true,
+      "audits_conducted": true,
+      "last_audit_date": "2024-03-01",
+      "audit_frequency": "Annual",
+      "auditor_competence_defined": true,
+      "nonconformities_from_last_audit": 3,
+      "nonconformities_closed": 2
+    },
+    "management_review": {
+      "conducted_regularly": true,
+      "inputs_include": [
+        "Results of environmental monitoring and measurement",
+        "Status of corrective actions from previous reviews",
+        "Audit findings"
+      ],
+      "outputs_documented": true,
+      "actions_tracked": true
+    }
+  },
+  "improvement": {
+    "nonconformity_procedure": true,
+    "corrective_action_process": true,
+    "open_corrective_actions": 4,
+    "continual_improvement_demonstrated": true,
+    "improvement_examples": [
+      "Installed LED lighting across Birmingham site — 12% energy saving",
+      "Switched to water-based flux from solvent-based — reduced VOC generation by 40%",
+      "Implemented paperless work orders — reduced paper consumption by 70%"
+    ]
+  },
+  "certifications": {
+    "iso_14001_certified": false,
+    "other_certifications": ["ISO 9001:2015", "ISO 45001:2018"],
+    "certification_body": "BSI Group",
+    "notes": "Targeting ISO 14001 certification by Q2 2025. Currently in pre-assessment stage."
+  },
+  "documents_provided": [
+    {"document": "Environmental Policy Statement", "filename": "Environmental_Policy_v2.3.pdf", "date": "2024-03-15"},
+    {"document": "Environmental Aspects Register", "filename": "Aspects_Register_2024.xlsx", "date": "2024-01-10"},
+    {"document": "Legal Register", "filename": "Legal_Requirements_Register_Q1_2024.xlsx", "date": "2024-02-28"},
+    {"document": "Objectives and Targets Plan", "filename": "EnvObjectives_2024_2025.pdf", "date": "2024-01-15"},
+    {"document": "Internal Audit Report 2024", "filename": "Internal_Audit_Report_Mar2024.pdf", "date": "2024-03-15"},
+    {"document": "Management Review Minutes", "filename": "Management_Review_Jan2024.pdf", "date": "2024-01-20"},
+    {"document": "Emergency Procedures Manual", "filename": "Emergency_Procedures_v3.pdf", "date": "2023-11-01"},
+    {"document": "Training Records", "filename": "Training_Records_2024.xlsx", "date": "2024-04-10"}
+  ]
+}

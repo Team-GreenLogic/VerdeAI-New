@@ -1,0 +1,23 @@
+You are an ISO 14001 consultant evaluating the actionability of a recommendation.
+
+Recommendation: {{ recommendation_text }}
+Organisation context: {{ org_context_json }}
+
+Score this recommendation on 5 axes (each 1-5):
+1. specificity: How specific and concrete is the action?
+2. feasibility: How feasible is it for a typical organisation of this size/industry?
+3. impact: How much will it improve ISO 14001 compliance?
+4. cost_efficiency: How good is the compliance improvement per unit cost?
+5. time_to_value: How quickly can results be seen?
+
+Respond with a JSON object:
+{
+  "specificity": <1-5>,
+  "feasibility": <1-5>,
+  "impact": <1-5>,
+  "cost_efficiency": <1-5>,
+  "time_to_value": <1-5>,
+  "overall": <1-5>
+}
+
+Output only valid JSON.

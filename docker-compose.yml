@@ -1,0 +1,129 @@
+version: "3.9"
+
+services:
+  api-gateway:
+    build: { context: ., dockerfile: services/api-gateway/Dockerfile }
+    env_file: [.env]
+    ports: ["8000:8000"]
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+
+  document-processor:
+    build: { context: ., dockerfile: services/document-processor/Dockerfile }
+    env_file: [.env]
+    restart: unless-stopped
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    deploy:
+      replicas: 2
+
+  iso-knowledge:
+    build: { context: ., dockerfile: services/iso-knowledge/Dockerfile }
+    env_file: [.env]
+    restart: unless-stopped
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  gap-analyzer:
+    build: { context: ., dockerfile: services/gap-analyzer/Dockerfile }
+    env_file: [.env]
+    restart: unless-stopped
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    deploy:
+      replicas: 2
+
+  recommendation:
+    build: { context: ., dockerfile: services/recommendation/Dockerfile }
+    env_file: [.env]
+    restart: unless-stopped
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  missing-requirements:
+    build: { context: ., dockerfile: services/missing-requirements/Dockerfile }
+    env_file: [.env]
+    restart: unless-stopped
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  chat-rag:
+    build: { context: ., dockerfile: services/chat-rag/Dockerfile }
+    env_file: [.env]
+    ports: ["8001:8001"]
+    depends_on:
+      mongodb:  { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+
+  mongodb:
+    image: mongodb/mongodb-atlas-local:8.0
+    ports: ["27017:27017"]
+    volumes:
+      - mongo-data:/data/db
+      - ./infra/mongodb/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports: ["5672:5672", "15672:15672"]
+    volumes:
+      - rmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: "xforwarded"
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro
+      - keycloak-data:/opt/keycloak/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+volumes:
+  mongo-data:
+  rmq-data:
+  keycloak-data:

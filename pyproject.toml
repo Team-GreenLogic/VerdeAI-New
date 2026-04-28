@@ -1,0 +1,61 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "ASYNC", "S", "C4"]
+ignore = [
+    "S101",   # assert used (needed in tests)
+    "S105",   # hardcoded password (false positives in tests/config)
+    "S106",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "N"]
+"**/tests/**" = ["S", "N"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["build", "dist", ".venv"]
+
+[[tool.mypy.overrides]]
+module = [
+    "motor.*",
+    "aio_pika.*",
+    "dramatiq.*",
+    "langfuse.*",
+    "voyageai.*",
+    "tavily.*",
+    "docling.*",
+    "bm25s.*",
+    "fastcdc.*",
+    "imagehash.*",
+    "weasyprint.*",
+    "opentelemetry.*",
+    "openrouter.*",
+    "python_keycloak.*",
+    "langgraph.*",
+    "langchain_core.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "shared/tests",
+    "services/api-gateway/tests",
+    "services/document-processor/tests",
+    "services/iso-knowledge/tests",
+    "services/gap-analyzer/tests",
+    "services/recommendation/tests",
+    "services/missing-requirements/tests",
+    "services/chat-rag/tests",
+    "tests",
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "verdeai-gap-analyzer"
+version = "0.1.0"
+description = "VerdeAI Gap Analyzer worker"
+requires-python = ">=3.12"
+dependencies = [
+    "verdeai-shared",
+    "dramatiq[rabbitmq]~=1.17",
+    "langgraph~=0.2",
+    "langchain-core~=0.3",
+    "motor~=3.6",
+    "redis[asyncio]~=5.0",
+    "aio-pika~=9.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

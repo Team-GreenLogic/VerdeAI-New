@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "verdeai-missing-requirements"
+version = "0.1.0"
+description = "VerdeAI Missing Requirements worker"
+requires-python = ">=3.12"
+dependencies = [
+    "verdeai-shared",
+    "dramatiq[rabbitmq]~=1.17",
+    "motor~=3.6",
+    "aio-pika~=9.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

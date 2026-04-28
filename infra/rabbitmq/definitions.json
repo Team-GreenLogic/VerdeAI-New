@@ -1,0 +1,215 @@
+{
+  "users": [
+    {
+      "name": "verdeai",
+      "password": "verdeai",
+      "tags": "administrator"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "verdeai",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "vhosts": [{ "name": "/" }],
+  "exchanges": [
+    {
+      "name": "documents",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "documents.dlx",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "analyses",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "analyses.dlx",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "iso",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "documents.process",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "documents.dlx"
+      }
+    },
+    {
+      "name": "documents.invalidate",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "documents.dlx"
+      }
+    },
+    {
+      "name": "documents.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "quorum" }
+    },
+    {
+      "name": "analyses.run",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "analyses.dlx"
+      }
+    },
+    {
+      "name": "analyses.recommend",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "analyses.dlx"
+      }
+    },
+    {
+      "name": "analyses.missing",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "analyses.dlx"
+      }
+    },
+    {
+      "name": "analyses.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "quorum" }
+    },
+    {
+      "name": "iso.cache_bust",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": { "x-queue-type": "quorum" }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "documents",
+      "vhost": "/",
+      "destination": "documents.process",
+      "destination_type": "queue",
+      "routing_key": "document.uploaded",
+      "arguments": {}
+    },
+    {
+      "source": "documents",
+      "vhost": "/",
+      "destination": "documents.invalidate",
+      "destination_type": "queue",
+      "routing_key": "document.deleted",
+      "arguments": {}
+    },
+    {
+      "source": "documents.dlx",
+      "vhost": "/",
+      "destination": "documents.dlq",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "analyses",
+      "vhost": "/",
+      "destination": "analyses.run",
+      "destination_type": "queue",
+      "routing_key": "analysis.requested",
+      "arguments": {}
+    },
+    {
+      "source": "analyses",
+      "vhost": "/",
+      "destination": "analyses.recommend",
+      "destination_type": "queue",
+      "routing_key": "analysis.gaps.ready",
+      "arguments": {}
+    },
+    {
+      "source": "analyses",
+      "vhost": "/",
+      "destination": "analyses.missing",
+      "destination_type": "queue",
+      "routing_key": "analysis.missing.ready",
+      "arguments": {}
+    },
+    {
+      "source": "analyses.dlx",
+      "vhost": "/",
+      "destination": "analyses.dlq",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "iso",
+      "vhost": "/",
+      "destination": "iso.cache_bust",
+      "destination_type": "queue",
+      "routing_key": "iso.#",
+      "arguments": {}
+    }
+  ],
+  "permissions": [],
+  "parameters": [],
+  "policies": [],
+  "global_parameters": [],
+  "topic_permissions": []
+}

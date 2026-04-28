@@ -1,0 +1,8 @@
+verdeai-phase-0-bootstrap
+
+claude --resume "verdeai-phase-0-bootstrap"
+
+mongodb://localhost:27017
+
+
+sudo docker compose logs -f document-processor
