@@ -6,3 +6,19 @@ mongodb://localhost:27017
 
 
 sudo docker compose logs -f document-processor
+
+---
+
+To avoid mongodb startup failiure, always use: 
+
+sudo docker compose stop
+
+and
+
+sudo docker compose start
+
+instead up or down
+
+---
+
+sudo docker compose logs -f gap-analyzer
