@@ -71,7 +71,7 @@ async def declare_topology(channel: Channel) -> None:
         durable=True,
         arguments={**_QUORUM_WITH_DLX, "x-dead-letter-exchange": "analyses.dlx"},
     )
-    await ana_missing_q.bind(ana_ex, routing_key="analysis.missing.ready")
+    await ana_missing_q.bind(ana_ex, routing_key="analysis.gaps.ready")
 
     ana_dlq = await channel.declare_queue(
         "analyses.dlq", durable=True, arguments=_QUORUM

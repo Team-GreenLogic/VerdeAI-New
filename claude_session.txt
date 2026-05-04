@@ -22,3 +22,12 @@ instead up or down
 ---
 
 sudo docker compose logs -f gap-analyzer
+
+---
+
+mongodb://localhost:27017/?directConnection=true
+
+---
+
+user3@example.com
+abc12345

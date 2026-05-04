@@ -10,8 +10,13 @@ from verdeai_shared.db.repositories.result_store import ResultStoreRepository
 from verdeai_shared.messaging.connection import get_channel
 from verdeai_shared.messaging.events import AnalysisGapsReady, AnalysisRequested
 
+from verdeai_shared.pipeline.missing_requests import generate_missing_requests
+from verdeai_shared.pipeline.recommendations import generate_recommendations
+
 from app.pipeline.analyse_clause import AnalysisPaused, analyse_clause
 from app.progress import emit
+
+_GAP_DECISIONS = ("Met", "Insufficient Evidence")
 
 
 async def handle_analysis_requested(message: IncomingMessage) -> None:
@@ -105,6 +110,21 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 decision = result.get("decision", "Unknown")
                 if decision != "Met":
                     gap_count += 1
+
+                # Inject clause_id so shared pipeline functions can key on it
+                result["clause_id"] = clause_id
+
+                # Generate recommendations + missing requests immediately for gap clauses
+                if decision not in _GAP_DECISIONS:
+                    try:
+                        await generate_recommendations(db, tenant_id, analysis_id, result)
+                    except Exception as exc:
+                        logger.warning("Recommendation generation failed", clause_id=clause_id, error=str(exc))
+                    try:
+                        await generate_missing_requests(db, tenant_id, analysis_id, result)
+                    except Exception as exc:
+                        logger.warning("Missing-requests generation failed", clause_id=clause_id, error=str(exc))
+
             except AnalysisPaused:
                 logger.info("Analysis paused mid-clause", analysis_id=analysis_id, clause_id=clause_id)
                 await emit(tenant_id, analysis_id, "analysis", "paused",

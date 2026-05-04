@@ -45,6 +45,20 @@ class GapResult(BaseModel):
     missing_evidence: list[str]
 
 
+class RecommendationItem(BaseModel):
+    clause_id: str
+    text: str
+    cost: int
+    effort_weeks: float
+    impact: int
+
+
+class MissingRequirementItem(BaseModel):
+    clause_id: str
+    field_path: str
+    request_text: str
+
+
 async def _get_owned(db: Any, analysis_id: str, tenant_id: str) -> dict[str, Any]:
     """Fetch analysis doc, raise 404 if not found or not owned by tenant."""
     doc = await db.analyses.find_one({"analysis_id": analysis_id, "tenant_id": tenant_id})
@@ -241,6 +255,62 @@ async def get_analysis_results(
             reasoning=r.get("reasoning", ""),
             citations=r.get("citations", []),
             missing_evidence=r.get("missing_evidence", []),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/{analysis_id}/recommendations", response_model=list[RecommendationItem])
+async def get_recommendations(
+    analysis_id: str,
+    principal: CurrentPrincipal,
+) -> list[RecommendationItem]:
+    """Get per-clause recommendations generated after gap analysis."""
+    tenant_id = principal.tenant_id
+    db = get_database()
+
+    await _get_owned(db, analysis_id, tenant_id)
+
+    cursor = db.recommendation_store.find(
+        {"analysis_id": analysis_id, "tenant_id": tenant_id},
+        sort=[("clause_id", 1)],
+    )
+    rows = await cursor.to_list(length=None)
+
+    return [
+        RecommendationItem(
+            clause_id=r["clause_id"],
+            text=r.get("text", ""),
+            cost=r.get("cost", 0),
+            effort_weeks=r.get("effort_weeks", 0),
+            impact=r.get("impact", 0),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/{analysis_id}/missing-requirements", response_model=list[MissingRequirementItem])
+async def get_missing_requirements(
+    analysis_id: str,
+    principal: CurrentPrincipal,
+) -> list[MissingRequirementItem]:
+    """Get missing-requirement request drafts generated after gap analysis."""
+    tenant_id = principal.tenant_id
+    db = get_database()
+
+    await _get_owned(db, analysis_id, tenant_id)
+
+    cursor = db.missing_request_store.find(
+        {"analysis_id": analysis_id, "tenant_id": tenant_id},
+        sort=[("clause_id", 1)],
+    )
+    rows = await cursor.to_list(length=None)
+
+    return [
+        MissingRequirementItem(
+            clause_id=r["clause_id"],
+            field_path=r.get("field_path", ""),
+            request_text=r.get("request_text", ""),
         )
         for r in rows
     ]
