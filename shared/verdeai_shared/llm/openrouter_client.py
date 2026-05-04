@@ -62,20 +62,21 @@ async def stream(
     max_tokens: int = 2048,
     provider: dict[str, Any] | None = None,
 ) -> AsyncGenerator[Any, None]:
-    """Stream a chat completion. Yields delta chunks."""
+    """Stream a chat completion. Yields ChatCompletionChunk objects with .choices."""
     client = _get_client()
     extra_body: dict[str, Any] = {}
     if provider is not None:
         extra_body["provider"] = provider
-    async with client.chat.completions.stream(
+    response = await client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
+        stream=True,
         extra_body=extra_body or None,
-    ) as stream_ctx:
-        async for event in stream_ctx:
-            yield event
+    )
+    async for chunk in response:
+        yield chunk
 
 
 async def aclose() -> None:
