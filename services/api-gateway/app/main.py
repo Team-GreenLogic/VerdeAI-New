@@ -17,7 +17,7 @@ from app.config import settings
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.tenant_scope import TenantScopeMiddleware
-from app.routers import analyses, auth, documents, health, ws
+from app.routers import analyses, auth, documents, health, org_profile, ws
 
 
 @asynccontextmanager
@@ -62,4 +62,5 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(analyses.router)
+app.include_router(org_profile.router)
 app.include_router(ws.router)
