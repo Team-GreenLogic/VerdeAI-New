@@ -116,7 +116,7 @@ async def rag_stream(
 
     try:
         async for event in stream(
-            model=settings.PRIMARY_REASONING_MODEL,
+            model=settings.CHEAP_REASONING_MODEL,
             messages=messages,
             temperature=0.3,
             max_tokens=2048,

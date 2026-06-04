@@ -76,3 +76,5 @@ mongo-data/
 *.key
 *.crt
 secrets/
+
+CLAUDE.md
