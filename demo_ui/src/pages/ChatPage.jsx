@@ -2,7 +2,36 @@ import { useEffect, useRef, useState } from 'react'
 import { createSession, streamChat } from '../api/chat.js'
 import Spinner from '../components/Spinner.jsx'
 
-function Message({ role, content, citations, streaming }) {
+function CitationModal({ citation, onClose }) {
+  if (!citation) return null
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-5 flex flex-col gap-3"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="font-semibold text-gray-800 text-sm">📄 {citation.filename}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Page {citation.page}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+          >✕</button>
+        </div>
+        <div className="bg-gray-50 rounded-xl px-4 py-3 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap max-h-72 overflow-y-auto scrollbar-thin">
+          {citation.text || 'No excerpt available.'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Message({ role, content, citations, streaming, onCitationClick }) {
   return (
     <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[75%] ${role === 'user' ? 'order-2' : ''}`}>
@@ -27,9 +56,13 @@ function Message({ role, content, citations, streaming }) {
             </summary>
             <div className="mt-1 space-y-1 pl-1">
               {citations.map((c, i) => (
-                <div key={i} className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
+                <button
+                  key={i}
+                  onClick={() => onCitationClick(c)}
+                  className="w-full text-left text-xs text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-100 rounded px-2 py-1 transition-colors"
+                >
                   📄 {c.filename} — p.{c.page}
-                </div>
+                </button>
               ))}
             </div>
           </details>
@@ -52,6 +85,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
+  const [activeCitation, setActiveCitation] = useState(null)
   const abortRef = useRef(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -142,6 +176,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
+      <CitationModal citation={activeCitation} onClose={() => setActiveCitation(null)} />
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-gray-100">
         <div>
@@ -187,6 +222,7 @@ export default function ChatPage() {
             content={m.content}
             citations={m.citations}
             streaming={m.streaming}
+            onCitationClick={setActiveCitation}
           />
         ))}
 

@@ -20,6 +20,11 @@ export function streamChat(question, sessionId, onToken, onCitations, onDone, on
   const controller = new AbortController()
   const token = localStorage.getItem('access_token')
 
+  // Safety wrapper — ensures onDone() is called exactly once even if the
+  // server closes the connection without sending a "done" SSE event.
+  let doneCalled = false
+  const safeDone = () => { if (!doneCalled) { doneCalled = true; onDone() } }
+
   fetch(`${CHAT_URL}/chat`, {
     method: 'POST',
     headers: {
@@ -32,7 +37,7 @@ export function streamChat(question, sessionId, onToken, onCitations, onDone, on
     .then(async (res) => {
       if (!res.ok) {
         onError(`HTTP ${res.status}`)
-        onDone()
+        safeDone()
         return
       }
       const reader = res.body.getReader()
@@ -44,8 +49,8 @@ export function streamChat(question, sessionId, onToken, onCitations, onDone, on
         if (done) break
         buffer += decoder.decode(value, { stream: true })
 
-        // Process complete SSE frames (split on double newline)
-        const frames = buffer.split('\n\n')
+        // Split on \r\n\r\n or \n\n — sse-starlette uses CRLF line endings
+        const frames = buffer.split(/\r?\n\r?\n/)
         buffer = frames.pop() // keep incomplete frame
 
         for (const frame of frames) {
@@ -54,20 +59,31 @@ export function streamChat(question, sessionId, onToken, onCitations, onDone, on
             .find((l) => l.startsWith('data:'))
           if (!dataLine) continue
           const raw = dataLine.slice(5).trim()
-          try {
-            const event = JSON.parse(raw)
-            if (event.type === 'token') onToken(event.content)
-            else if (event.type === 'citations') onCitations(event.citations || [])
-            else if (event.type === 'error') onError(event.content)
-            else if (event.type === 'done') onDone()
-          } catch (_) {}
+          let event
+          try { event = JSON.parse(raw) } catch (_) { continue }
+          console.debug('[chat] event:', event)
+
+          if (event.type === 'token') {
+            onToken(event.content)
+            // Yield to the macrotask queue so React renders each token
+            // individually, producing a natural typing effect.
+            await new Promise((r) => setTimeout(r, 0))
+          } else if (event.type === 'citations') {
+            onCitations(event.citations || [])
+          } else if (event.type === 'error') {
+            onError(event.content)
+          } else if (event.type === 'done') {
+            safeDone()
+          }
         }
       }
+      // Ensure loading stops if the stream closes without a "done" event
+      safeDone()
     })
     .catch((err) => {
       if (err.name !== 'AbortError') {
         onError(err.message)
-        onDone()
+        safeDone()
       }
     })
 

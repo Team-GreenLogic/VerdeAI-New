@@ -60,18 +60,27 @@ async def chat(
 
     db = get_database()
 
-    # Load conversation history
-    history = await load_history(tenant_id, session_id, settings.CHAT_HISTORY_WINDOW)
-
     logger.info("Chat request", tenant_id=tenant_id, session_id=session_id)
 
     async def _generate():
         answer_parts: list[str] = []
+        done_yielded = False
+        try:
+            # Load history inside the generator so Redis errors surface as SSE errors
+            history = await load_history(tenant_id, session_id, settings.CHAT_HISTORY_WINDOW)
 
-        async for event in rag_stream(db, tenant_id, question, history):
-            if event["type"] == "token":
-                answer_parts.append(event["content"])
-            yield {"data": json.dumps(event)}
+            async for event in rag_stream(db, tenant_id, question, history):
+                if event["type"] == "token":
+                    answer_parts.append(event["content"])
+                if event["type"] == "done":
+                    done_yielded = True
+                yield {"data": json.dumps(event)}
+        except Exception as exc:
+            logger.error("Chat stream error", error=str(exc))
+            yield {"data": json.dumps({"type": "error", "content": "An internal error occurred"})}
+        finally:
+            if not done_yielded:
+                yield {"data": json.dumps({"type": "done"})}
 
         # Persist turn to history after streaming completes
         full_answer = "".join(answer_parts)

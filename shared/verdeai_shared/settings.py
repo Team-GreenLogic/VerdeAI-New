@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     OPENROUTER_APP_NAME: str = "VerdeAI"
     PRIMARY_REASONING_MODEL: str = "deepseek/deepseek-r1-0528"
     CHEAP_REASONING_MODEL: str = "qwen/qwen3-coder"
+    CHAT_MODEL: str = "deepseek/deepseek-chat"
     VISION_MODEL: str = "mistralai/mistral-small-3.1-24b-instruct"
     LLM_MAX_RETRIES: int = 3
 
