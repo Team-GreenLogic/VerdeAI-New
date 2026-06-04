@@ -114,10 +114,10 @@ async def analyse_clause(
         answer = await stream_with_reasoning(
             model=settings.PRIMARY_REASONING_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
+            max_tokens=8192,
             temperature=0.0,
             response_format={"type": "json_object"},
-            on_thinking=on_thinking,
+            on_thinking=None,  # state_compare is an intermediate step — keep terminal clean
         )
         state_diff = json.loads(answer)
     except Exception as exc:
@@ -142,7 +142,7 @@ async def analyse_clause(
         answer = await stream_with_reasoning(
             model=settings.PRIMARY_REASONING_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
+            max_tokens=8192,
             temperature=0.0,
             response_format={"type": "json_object"},
             on_thinking=on_thinking,

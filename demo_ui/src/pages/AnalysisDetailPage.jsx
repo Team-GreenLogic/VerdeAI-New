@@ -37,6 +37,7 @@ function ProgressPanel({ analysisId }) {
         thinkingText = ''               // new clause — reset terminal
       } else if (m.stage === 'thinking_token') {
         thinkingText += m.detail        // accumulate reasoning text
+        if (!thinkingClause && m.clause_id) thinkingClause = m.clause_id  // recover on reload
       } else if (m.stage === 'clause') {
         thinkingClause = null
         thinkingText = ''

@@ -131,9 +131,22 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                     token, clause_id=_id, redis_client=redis,
                 )
 
+            async def on_phase_change(
+                *, _id: str = _cid, _comp: int = completed, _tot: int = total, _gaps: int = gap_count
+            ) -> None:
+                # Re-emit the thinking event so the frontend resets thinkingText
+                # between state_compare and gap_analyse — prevents double accumulation.
+                await emit(
+                    tenant_id, analysis_id, "thinking", "progress",
+                    f"Analysing clause {_id}…",
+                    clause_id=_id, completed=_comp, total=_tot, gap_count=_gaps,
+                    redis_client=redis,
+                )
+
             try:
                 result = await analyse_clause(db, tenant_id, analysis_id, clause,
-                                              on_thinking=on_thinking)
+                                              on_thinking=on_thinking,
+                                              on_phase_change=on_phase_change)
                 decision = result.get("decision", "Unknown")
                 if decision != "Met":
                     gap_count += 1
