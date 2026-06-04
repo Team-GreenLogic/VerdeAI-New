@@ -245,9 +245,9 @@ export default function ChatPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-5 space-y-4 scrollbar-thin">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-5 pt-10">
+      <div className="flex-1 overflow-y-auto py-5 scrollbar-thin flex flex-col">
+        {messages.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-5">
             <div className="text-slate-300">
               <ChatBubbleSVG />
             </div>
@@ -255,7 +255,7 @@ export default function ChatPage() {
               <p className="text-slate-700 font-semibold">Ask anything about your compliance</p>
               <p className="text-sm text-slate-400 mt-1">Answers are grounded in your uploaded documents</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 w-full max-w-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
               {SUGGESTIONS.map((s, i) => (
                 <button
                   key={i}
@@ -269,26 +269,28 @@ export default function ChatPage() {
               ))}
             </div>
           </div>
-        )}
+        ) : (
+          <div className="space-y-4">
+            {messages.map((m, i) => (
+              <Message
+                key={i}
+                role={m.role}
+                content={m.content}
+                citations={m.citations}
+                streaming={m.streaming}
+                onCitationClick={setActiveCitation}
+              />
+            ))}
 
-        {messages.map((m, i) => (
-          <Message
-            key={i}
-            role={m.role}
-            content={m.content}
-            citations={m.citations}
-            streaming={m.streaming}
-            onCitationClick={setActiveCitation}
-          />
-        ))}
+            {error && !streaming && (
+              <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
-        {error && !streaming && (
-          <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
-            {error}
+            <div ref={bottomRef} />
           </div>
         )}
-
-        <div ref={bottomRef} />
       </div>
 
       {/* Input */}
