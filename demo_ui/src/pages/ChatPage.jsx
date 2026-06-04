@@ -84,9 +84,19 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
               : 'bg-white border border-slate-200 shadow-sm text-slate-800 rounded-tl-sm'
           }`}
         >
-          {content}
-          {streaming && (
-            <span className="inline-block w-1.5 h-4 bg-slate-400 ml-0.5 animate-pulse rounded" />
+          {streaming && !content ? (
+            <span className="flex items-center gap-1 h-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+          ) : (
+            <>
+              {content}
+              {streaming && (
+                <span className="inline-block w-0.5 h-4 bg-slate-400 ml-0.5 align-middle animate-pulse rounded" />
+              )}
+            </>
           )}
         </div>
 
