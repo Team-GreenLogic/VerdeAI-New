@@ -78,7 +78,8 @@ export default function Dashboard() {
     ]).then(([c, a, d]) => {
       setCompleteness(c)
       setAnalyses(a || [])
-      setDocs(Array.isArray(d) ? d : d?.items || [])
+      const allDocs = Array.isArray(d) ? d : d?.items || []
+      setDocs(allDocs.filter(doc => doc.status !== 'deleted'))
       setLoading(false)
     })
   }, [])
@@ -86,7 +87,7 @@ export default function Dashboard() {
   const latest = analyses[0] || null
   const activeStatuses = ['pending', 'running']
   const hasActive = analyses.some(a => activeStatuses.includes(a.status))
-  const processedDocs = docs.filter(d => d.status === 'completed').length
+  const processedDocs = docs.filter(d => d.status === 'ready').length
 
   async function handleStartAnalysis() {
     setStarting(true)

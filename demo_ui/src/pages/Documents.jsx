@@ -60,14 +60,15 @@ export default function Documents() {
 
   async function refresh() {
     const data = await listDocuments().catch(() => [])
-    setDocs(Array.isArray(data) ? data : data?.items || [])
+    const items = Array.isArray(data) ? data : data?.items || []
+    setDocs(items.filter(doc => doc.status !== 'deleted'))
   }
 
   useEffect(() => {
     async function init() {
       try {
         const data = await listDocuments().catch(() => ({ items: [] }))
-        const items = Array.isArray(data) ? data : data?.items || []
+        const items = (Array.isArray(data) ? data : data?.items || []).filter(doc => doc.status !== 'deleted')
         setDocs(items)
 
         // Recover any jobs that were still processing before a page reload.
