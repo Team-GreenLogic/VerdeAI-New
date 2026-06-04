@@ -36,12 +36,15 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
 
     db = get_database()
 
-    # Atomically claim the analysis: only proceed if status is still "pending".
-    # Prevents duplicate processing if the message is redelivered while another
-    # worker already picked it up, and skips paused analyses that were paused
-    # before the worker picked them up.
+    # Atomically claim the analysis.
+    # First delivery:  only claim "pending" — prevents two healthy workers racing.
+    # Redelivery:      also claim "running" — the previous worker crashed without
+    #                  acking; RabbitMQ only sets redelivered=True after the consumer
+    #                  disconnected, so re-claiming is safe. The done_ids checkpoint
+    #                  below ensures already-completed clauses are skipped.
+    allowed_statuses = ["pending", "running"] if message.redelivered else ["pending"]
     claim = await db.analyses.find_one_and_update(
-        {"analysis_id": analysis_id, "tenant_id": tenant_id, "status": "pending"},
+        {"analysis_id": analysis_id, "tenant_id": tenant_id, "status": {"$in": allowed_statuses}},
         {"$set": {"status": "running"}},
     )
     if claim is None:
@@ -51,6 +54,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             "Analysis not claimable — skipping",
             analysis_id=analysis_id,
             status=current_status,
+            redelivered=message.redelivered,
         )
         return  # ack the message cleanly
 
@@ -148,6 +152,17 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 # Inject clause_id so shared pipeline functions can key on it
                 result["clause_id"] = clause_id
 
+                # Emit clause event immediately after persist so history is consistent
+                # even if the service crashes during subsequent recommendation generation.
+                completed += 1
+                await emit(
+                    tenant_id, analysis_id, "clause", "progress",
+                    f"{clause_id}: {decision} ({completed}/{total})",
+                    clause_id=clause_id, decision=decision,
+                    completed=completed, total=total, gap_count=gap_count,
+                    redis_client=redis,
+                )
+
                 # Generate recommendations + missing requests immediately for gap clauses
                 if decision not in _GAP_DECISIONS:
                     try:
@@ -169,15 +184,14 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 logger.error("Clause analysis failed", clause_id=clause_id, error=str(exc))
                 decision = "Error"
                 gap_count += 1
-
-            completed += 1
-            await emit(
-                tenant_id, analysis_id, "clause", "progress",
-                f"{clause_id}: {decision} ({completed}/{total})",
-                clause_id=clause_id, decision=decision,
-                completed=completed, total=total, gap_count=gap_count,
-                redis_client=redis,
-            )
+                completed += 1
+                await emit(
+                    tenant_id, analysis_id, "clause", "progress",
+                    f"{clause_id}: {decision} ({completed}/{total})",
+                    clause_id=clause_id, decision=decision,
+                    completed=completed, total=total, gap_count=gap_count,
+                    redis_client=redis,
+                )
 
         logger.info(
             "Gap analysis complete",

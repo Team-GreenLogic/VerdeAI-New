@@ -81,7 +81,7 @@ async def ws_jobs(
         finally:
             await r_hist.aclose()
 
-        terminal_in_history = False
+        last_status: str | None = None
         disconnected = False
         last_hist_stage: str | None = None
         for msg_str in history:
@@ -92,11 +92,16 @@ async def ws_jobs(
                 break
             try:
                 ev = json.loads(msg_str)
-                if ev.get("status") in ("done", "failed", "deduped"):
-                    terminal_in_history = True
+                last_status = ev.get("status")
                 last_hist_stage = ev.get("stage")
             except (json.JSONDecodeError, AttributeError):
                 pass
+
+        # Only the LAST event's status determines whether the job is already
+        # finished.  Checking every event would break pause/resume — a historical
+        # "paused" event in the middle of the list would prevent live streaming
+        # of later events after resume.
+        terminal_in_history = last_status in ("done", "failed", "deduped", "paused")
 
         # If the last structural event was a 'thinking' event the analysis is
         # mid-clause — replay the bounded thinking-token buffer so the client
@@ -131,7 +136,7 @@ async def ws_jobs(
                 # Check for terminal event
                 try:
                     payload = json.loads(data_str)
-                    if payload.get("status") in ("done", "failed", "deduped"):
+                    if payload.get("status") in ("done", "failed", "deduped", "paused"):
                         break
                 except (json.JSONDecodeError, AttributeError):
                     pass

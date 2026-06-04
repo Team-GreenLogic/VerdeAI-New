@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiPost } from '../api/client.js'
 
 const WS_URL = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8000'
-const TERMINAL = new Set(['done', 'failed', 'deduped', 'paused'])
+const TERMINAL = new Set(['done', 'failed', 'deduped'])
 const MAX_RETRIES = 3
 
 /**
@@ -24,8 +24,16 @@ export function useJobProgress(jobId, { onThinkingToken } = {}) {
   const onThinkingTokenRef = useRef(onThinkingToken)
   useEffect(() => { onThinkingTokenRef.current = onThinkingToken }, [onThinkingToken])
 
+  // Synchronous copy of status so onclose can check terminal state without
+  // racing with React's async state batching (ws.close() fires onclose sync).
+  const statusRef = useRef(status)
+  useEffect(() => { statusRef.current = status }, [status])
+
   const connect = useCallback(async () => {
     if (!jobId || !activeRef.current) return
+    // Clear messages on reconnect so the server's history replay produces
+    // a clean state (no duplicate clause entries from the previous connection).
+    setMessages([])
     try {
       const { ticket } = await apiPost('/ws/ticket')
       if (!activeRef.current) return
@@ -35,7 +43,6 @@ export function useJobProgress(jobId, { onThinkingToken } = {}) {
 
       ws.onopen = () => {
         setIsConnected(true)
-        retriesRef.current = 0
       }
 
       ws.onmessage = (e) => {
@@ -52,6 +59,9 @@ export function useJobProgress(jobId, { onThinkingToken } = {}) {
 
           setMessages((prev) => [...prev, payload])
           if (payload.status && TERMINAL.has(payload.status)) {
+            // Update ref synchronously so onclose (fired by ws.close() below)
+            // sees the terminal status and skips retry.
+            statusRef.current = payload.status
             setStatus(payload.status)
             ws.close()
           }
@@ -60,6 +70,8 @@ export function useJobProgress(jobId, { onThinkingToken } = {}) {
 
       ws.onclose = () => {
         setIsConnected(false)
+        // Don't retry if we already received a terminal status
+        if (statusRef.current && TERMINAL.has(statusRef.current)) return
         if (activeRef.current && retriesRef.current < MAX_RETRIES) {
           retriesRef.current++
           setTimeout(connect, 2000)
@@ -78,6 +90,7 @@ export function useJobProgress(jobId, { onThinkingToken } = {}) {
   useEffect(() => {
     if (!jobId) return
     activeRef.current = true
+    retriesRef.current = 0
     setMessages([])
     setStatus(null)
     connect()

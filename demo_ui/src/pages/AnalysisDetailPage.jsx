@@ -48,7 +48,7 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
 
   const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, clauseLog } = useMemo(() => {
     let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null
-    const clauseLog = []
+    const clauseMap = new Map()
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
       if (m.total != null) total = m.total
@@ -59,10 +59,10 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       } else if (m.stage === 'clause') {
         thinkingClause = null
         thinkingDetail = null
-        if (m.clause_id) clauseLog.push({ clause_id: m.clause_id, decision: m.decision || '' })
+        if (m.clause_id) clauseMap.set(m.clause_id, { clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, thinkingDetail, clauseLog }
+    return { completed, total, gapCount, thinkingClause, thinkingDetail, clauseLog: Array.from(clauseMap.values()) }
   }, [messages])
 
   useEffect(() => {
@@ -171,9 +171,9 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
             <span>Analysing…</span>
           </div>
         )}
-        {clauseLog.map((entry, i) => (
+        {clauseLog.map((entry) => (
           <div
-            key={i}
+            key={entry.clause_id}
             className={`flex items-center gap-2 text-xs border-l-2 rounded-r px-2 py-1.5 ${decisionBorder(entry.decision)}`}
           >
             <span className="font-mono font-semibold w-10 flex-shrink-0">{entry.clause_id}</span>
