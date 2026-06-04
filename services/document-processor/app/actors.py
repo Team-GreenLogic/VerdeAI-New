@@ -7,7 +7,8 @@ from aio_pika import IncomingMessage
 from loguru import logger
 
 from verdeai_shared.messaging.connection import get_channel
-from verdeai_shared.messaging.events import DocumentReady, DocumentUploaded
+from verdeai_shared.messaging.events import DocumentDeleted, DocumentReady, DocumentUploaded
+from verdeai_shared.retrieval.bm25 import remove_document_from_bm25_index
 
 from app.pipeline import (
     stage1_dedup,
@@ -108,6 +109,48 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
             pass
         await emit(tenant_id, document_id, "complete", "failed", str(exc))
         raise
+
+
+async def handle_document_deleted(message: IncomingMessage) -> None:
+    """Consume DocumentDeleted: hard-delete chunks and prune BM25 index."""
+    raw = message.body.decode()
+    try:
+        event = DocumentDeleted.model_validate_json(raw)
+    except Exception as exc:
+        logger.error("Failed to parse DocumentDeleted event", error=str(exc), raw=raw)
+        raise
+
+    tenant_id = event.tenant_id
+    document_id = event.document_id
+
+    logger.info("Invalidating document chunks", tenant_id=tenant_id, document_id=document_id)
+
+    from verdeai_shared.db.mongo import get_database
+    db = get_database()
+
+    # Collect chunk IDs before deletion (needed to prune BM25)
+    cursor = db["chunks"].find(
+        {"document_id": document_id, "tenant_id": tenant_id},
+        {"_id": 1},
+    )
+    chunk_docs = await cursor.to_list(length=None)
+    chunk_ids = [str(c["_id"]) for c in chunk_docs]
+
+    # Prune BM25 index first (uses chunk IDs still present in DB)
+    if chunk_ids:
+        await remove_document_from_bm25_index(db, tenant_id, chunk_ids)
+        logger.info("BM25 index pruned", tenant_id=tenant_id, removed=len(chunk_ids))
+
+    # Hard-delete chunks (vector search auto-excludes once docs are gone)
+    result = await db["chunks"].delete_many(
+        {"document_id": document_id, "tenant_id": tenant_id}
+    )
+    logger.info(
+        "Chunks deleted",
+        tenant_id=tenant_id,
+        document_id=document_id,
+        count=result.deleted_count,
+    )
 
 
 async def _publish_ready(event: DocumentReady) -> None:

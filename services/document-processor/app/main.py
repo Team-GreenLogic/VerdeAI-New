@@ -10,12 +10,13 @@ from verdeai_shared.messaging.connection import close_connection
 from verdeai_shared.observability.tracing import configure_tracing
 
 from app.config import settings
-from app.actors import handle_document_uploaded
+from app.actors import handle_document_deleted, handle_document_uploaded
 
 configure_logging(settings.SERVICE_NAME)
 configure_tracing(settings.SERVICE_NAME)
 
 _QUEUE = "documents.process"
+_INVALIDATE_QUEUE = "documents.invalidate"
 _MAX_RETRIES = 12
 _RETRY_DELAY = 5  # seconds between attempts
 
@@ -26,7 +27,9 @@ async def _run() -> None:
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
             consumer = AsyncConsumer(queue_name=_QUEUE, handler=handle_document_uploaded)
+            invalidate_consumer = AsyncConsumer(queue_name=_INVALIDATE_QUEUE, handler=handle_document_deleted)
             await consumer.start()
+            await invalidate_consumer.start()
             break
         except Exception as exc:
             if attempt == _MAX_RETRIES:

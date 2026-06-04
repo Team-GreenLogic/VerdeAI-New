@@ -34,6 +34,49 @@ async def bm25_search(
     return output
 
 
+async def remove_document_from_bm25_index(
+    db: Any,  # AsyncIOMotorDatabase
+    tenant_id: str,
+    chunk_ids_to_remove: list[str],
+) -> None:
+    """Remove specific chunk IDs from the tenant BM25 index and rebuild."""
+    record = await db["bm25_indexes"].find_one({"tenant_id": tenant_id})
+    if not record or not record.get("serialized"):
+        return
+
+    remove_set = set(chunk_ids_to_remove)
+    existing_ids: list[str] = record.get("chunk_ids", [])
+    existing_texts: list[str] = record.get("texts", [])
+
+    kept = [
+        (cid, txt)
+        for cid, txt in zip(existing_ids, existing_texts)
+        if cid not in remove_set
+    ]
+
+    if not kept:
+        await db["bm25_indexes"].delete_one({"tenant_id": tenant_id})
+        return
+
+    new_ids, new_texts = zip(*kept)
+    tokenized = bm25s.tokenize(list(new_texts))
+    index = bm25s.BM25()
+    index.index(tokenized)
+    serialized = pickle.dumps(index)
+
+    await db["bm25_indexes"].update_one(
+        {"tenant_id": tenant_id},
+        {
+            "$set": {
+                "serialized": serialized,
+                "chunk_ids": list(new_ids),
+                "texts": list(new_texts),
+                "version": record.get("version", 0) + 1,
+            }
+        },
+    )
+
+
 async def update_bm25_index(
     db: Any,  # AsyncIOMotorDatabase
     tenant_id: str,
