@@ -15,9 +15,18 @@ const DONE   = ['complete', 'failed', 'paused']
 function ProgressPanel({ analysisId }) {
   const { messages, isConnected } = useJobProgress(analysisId)
   const bottomRef = useRef()
+  const [fetchedCompleted, setFetchedCompleted] = useState(0)
 
-  const { completed, total, gapCount, thinkingClause, clauseLog } = useMemo(() => {
-    let completed = 0, total = 32, gapCount = 0, thinkingClause = null
+  // Seed the initial completed count from persisted results so a page reload
+  // shows the correct number immediately, before any WS event arrives.
+  useEffect(() => {
+    getResults(analysisId)
+      .then(r => setFetchedCompleted((r || []).length))
+      .catch(() => {})
+  }, [analysisId])
+
+  const { completed: wsCompleted, total, gapCount, thinkingClause, thinkingText, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingText = ''
     const clauseLog = []
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
@@ -25,17 +34,32 @@ function ProgressPanel({ analysisId }) {
       if (m.gap_count != null) gapCount = m.gap_count
       if (m.stage === 'thinking') {
         thinkingClause = m.clause_id || null
+        thinkingText = ''               // new clause — reset terminal
+      } else if (m.stage === 'thinking_token') {
+        thinkingText += m.detail        // accumulate reasoning text
       } else if (m.stage === 'clause') {
         thinkingClause = null
+        thinkingText = ''
         if (m.clause_id) clauseLog.push({ clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, clauseLog }
+    return { completed, total, gapCount, thinkingClause, thinkingText, clauseLog }
   }, [messages])
+
+  // WS events are authoritative once they arrive; fetchedCompleted is the floor
+  // so the counter never shows 0 on a fresh page load for a running analysis.
+  const completed = Math.max(wsCompleted, fetchedCompleted)
+
+  const terminalRef = useRef()
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight
+    }
+  }, [thinkingText])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [clauseLog.length, thinkingClause])
+  }, [clauseLog.length])
 
   const decisionStyle = (d) => {
     if (d === 'Met') return 'text-green-700 bg-green-50 border-green-100'
@@ -70,11 +94,23 @@ function ProgressPanel({ analysisId }) {
         />
       </div>
 
-      {/* Thinking indicator */}
-      {thinkingClause && (
-        <div className="flex items-center gap-2 text-xs text-blue-600 animate-pulse">
-          <span>🔍</span>
-          <span>Analysing clause {thinkingClause}…</span>
+      {/* Thinking terminal — shows live LLM reasoning stream */}
+      {(thinkingClause || thinkingText) && (
+        <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 opacity-70" />
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 opacity-70" />
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" />
+            <span className="text-xs text-gray-400 ml-1 font-mono">
+              🔍 reasoning — clause {thinkingClause}
+            </span>
+          </div>
+          <div
+            ref={terminalRef}
+            className="px-3 py-2 font-mono text-xs text-green-400 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin"
+          >
+            {thinkingText || <span className="animate-pulse">▋</span>}
+          </div>
         </div>
       )}
 

@@ -1,7 +1,9 @@
 """Single async OpenRouter client — uses openai SDK with OpenRouter base URL."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any
+
+from loguru import logger
 
 from verdeai_shared.settings import settings
 
@@ -77,6 +79,64 @@ async def stream(
     )
     async for chunk in response:
         yield chunk
+
+
+async def stream_with_reasoning(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    temperature: float = 0.0,
+    max_tokens: int = 2048,
+    response_format: dict[str, Any] | None = None,
+    on_thinking: Callable[[str], Awaitable[None]] | None = None,
+) -> str:
+    """Stream a completion, calling on_thinking for each reasoning_content chunk.
+
+    Returns the full answer text (content tokens only, not reasoning).
+    Compatible with response_format json_object — accumulates tokens and returns
+    the concatenated string for the caller to JSON-parse.
+    """
+    client = _get_client()
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    answer_parts: list[str] = []
+    first_chunk = True
+    response = await client.chat.completions.create(**kwargs)
+    async for chunk in response:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if delta is None:
+            continue
+
+        # reasoning_content is a non-standard field that OpenRouter adds for
+        # reasoning models (DeepSeek-R1). The OpenAI SDK's ChoiceDelta Pydantic
+        # model doesn't declare it, so it lands in model_extra rather than as a
+        # direct attribute. Try both locations.
+        thinking_chunk: str | None = getattr(delta, "reasoning_content", None)
+        if thinking_chunk is None:
+            extra: dict[str, Any] = getattr(delta, "model_extra", None) or {}
+            thinking_chunk = extra.get("reasoning_content") or extra.get("reasoning")
+
+        if first_chunk:
+            logger.debug(
+                "stream_with_reasoning first chunk",
+                delta_keys=list(vars(delta).keys()) if hasattr(delta, "__dict__") else "no-dict",
+                model_extra=getattr(delta, "model_extra", None),
+                thinking_chunk_present=thinking_chunk is not None,
+            )
+            first_chunk = False
+
+        if on_thinking and thinking_chunk:
+            await on_thinking(thinking_chunk)
+        if delta.content:
+            answer_parts.append(delta.content)
+    return "".join(answer_parts)
 
 
 async def aclose() -> None:

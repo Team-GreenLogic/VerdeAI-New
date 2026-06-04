@@ -11,6 +11,7 @@ For each ISO clause:
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +21,7 @@ from loguru import logger
 
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.result_store import ResultStoreRepository
-from verdeai_shared.llm.openrouter_client import complete
+from verdeai_shared.llm.openrouter_client import stream_with_reasoning
 from verdeai_shared.retrieval.embedder import embed_query
 from verdeai_shared.retrieval.hybrid import hybrid_retrieve
 from verdeai_shared.settings import settings
@@ -55,6 +56,7 @@ async def analyse_clause(
     tenant_id: str,
     analysis_id: str,
     clause: dict[str, Any],
+    on_thinking: Callable[[str], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     """Run the full analysis pipeline for one ISO clause. Returns gap result dict."""
     clause_id: str = clause["clause_id"]
@@ -98,7 +100,7 @@ async def analyse_clause(
         for e in state_entries
     ]
 
-    # 5. state_compare LLM call
+    # 5. state_compare LLM call (streams reasoning tokens to on_thinking callback)
     state_diff: dict[str, Any] = {}
     try:
         tmpl = _jinja.get_template("state_compare.j2")
@@ -109,14 +111,15 @@ async def analyse_clause(
             state_template_json=json.dumps(state_template_list, indent=2),
             evidence_chunks=evidence_text,
         )
-        resp = await complete(
+        answer = await stream_with_reasoning(
             model=settings.PRIMARY_REASONING_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1024,
             temperature=0.0,
             response_format={"type": "json_object"},
+            on_thinking=on_thinking,
         )
-        state_diff = json.loads(resp.choices[0].message.content)
+        state_diff = json.loads(answer)
     except Exception as exc:
         logger.warning("state_compare LLM call failed", clause_id=clause_id, error=str(exc))
 
@@ -125,7 +128,7 @@ async def analyse_clause(
     if status_doc and status_doc.get("status") == "paused":
         raise AnalysisPaused(analysis_id)
 
-    # 6. gap_analyse LLM call
+    # 6. gap_analyse LLM call (streams reasoning tokens to on_thinking callback)
     gap_result: dict[str, Any] = {}
     try:
         tmpl = _jinja.get_template("gap_analyse.j2")
@@ -136,14 +139,15 @@ async def analyse_clause(
             reference_context_json=json.dumps(state_diff.get("reference_context", {}), indent=2),
             evidence_chunks=evidence_text,
         )
-        resp = await complete(
+        answer = await stream_with_reasoning(
             model=settings.PRIMARY_REASONING_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1024,
             temperature=0.0,
             response_format={"type": "json_object"},
+            on_thinking=on_thinking,
         )
-        gap_result = json.loads(resp.choices[0].message.content)
+        gap_result = json.loads(answer)
     except Exception as exc:
         logger.warning("gap_analyse LLM call failed", clause_id=clause_id, error=str(exc))
         gap_result = dict(_INSUFFICIENT)

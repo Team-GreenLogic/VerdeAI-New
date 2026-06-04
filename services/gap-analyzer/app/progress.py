@@ -19,8 +19,13 @@ async def emit(
     clause_id: str | None = None,
     decision: str | None = None,
     gap_count: int | None = None,
+    redis_client: aioredis.Redis | None = None,  # type: ignore[type-arg]
 ) -> None:
-    """Publish a progress event to the glass-box channel for this job."""
+    """Publish a progress event to the glass-box channel for this job.
+
+    Pass redis_client to reuse an existing connection (e.g. for high-frequency
+    per-token thinking events). If omitted a new connection is created and closed.
+    """
     payload: dict = {"stage": stage, "status": status, "detail": detail}
     if completed is not None:
         payload["completed"] = completed
@@ -33,8 +38,10 @@ async def emit(
     if gap_count is not None:
         payload["gap_count"] = gap_count
     channel = f"glassbox.{tenant_id}.{job_id}"
-    r = aioredis.from_url(settings.REDIS_URL)
+    own_client = redis_client is None
+    r: aioredis.Redis = redis_client if redis_client is not None else aioredis.from_url(settings.REDIS_URL)  # type: ignore[type-arg]
     try:
         await r.publish(channel, json.dumps(payload))
     finally:
-        await r.aclose()
+        if own_client:
+            await r.aclose()

@@ -1,10 +1,12 @@
 """Gap Analyzer — aio-pika message handler."""
 
 import aio_pika
+import redis.asyncio as aioredis
 from aio_pika import IncomingMessage
 from loguru import logger
 
 from verdeai_shared.db.mongo import get_database
+from verdeai_shared.settings import settings
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.result_store import ResultStoreRepository
 from verdeai_shared.messaging.connection import get_channel
@@ -85,11 +87,16 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
     completed = len(done_ids)
     gap_count = sum(1 for r in existing if r.get("decision") != "Met")
 
-    await emit(tenant_id, analysis_id, "analysis", "running",
-               f"Analysing {total} clauses ({completed} already complete)",
-               completed=completed, total=total, gap_count=gap_count)
-
+    # One persistent Redis connection for the duration of the analysis.
+    # Avoids the overhead of creating a new connection for every progress event
+    # (especially important for high-frequency per-token thinking events).
+    redis: aioredis.Redis = aioredis.from_url(settings.REDIS_URL)  # type: ignore[type-arg]
     try:
+        await emit(tenant_id, analysis_id, "analysis", "running",
+                   f"Analysing {total} clauses ({completed} already complete)",
+                   completed=completed, total=total, gap_count=gap_count,
+                   redis_client=redis)
+
         for clause in clauses:
             clause_id = clause.get("clause_id", "")
 
@@ -103,17 +110,30 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             if doc and doc.get("status") == "paused":
                 logger.info("Analysis paused — stopping cleanly", analysis_id=analysis_id)
                 await emit(tenant_id, analysis_id, "analysis", "paused",
-                           f"Paused after {completed}/{total} clauses")
+                           f"Paused after {completed}/{total} clauses",
+                           redis_client=redis)
                 return  # ack cleanly; resume will re-publish the event
 
             await emit(
                 tenant_id, analysis_id, "thinking", "progress",
                 f"Analysing clause {clause_id}…",
                 clause_id=clause_id, completed=completed, total=total, gap_count=gap_count,
+                redis_client=redis,
             )
 
+            # Capture clause_id for the closure (safe — analyse_clause is awaited
+            # before the next iteration, so clause_id is stable for this call).
+            _cid = clause_id
+
+            async def on_thinking(token: str, *, _id: str = _cid) -> None:
+                await emit(
+                    tenant_id, analysis_id, "thinking_token", "progress",
+                    token, clause_id=_id, redis_client=redis,
+                )
+
             try:
-                result = await analyse_clause(db, tenant_id, analysis_id, clause)
+                result = await analyse_clause(db, tenant_id, analysis_id, clause,
+                                              on_thinking=on_thinking)
                 decision = result.get("decision", "Unknown")
                 if decision != "Met":
                     gap_count += 1
@@ -135,7 +155,8 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             except AnalysisPaused:
                 logger.info("Analysis paused mid-clause", analysis_id=analysis_id, clause_id=clause_id)
                 await emit(tenant_id, analysis_id, "analysis", "paused",
-                           f"Paused during {clause_id} ({completed}/{total} clauses complete)")
+                           f"Paused during {clause_id} ({completed}/{total} clauses complete)",
+                           redis_client=redis)
                 return  # ack cleanly; resume will re-publish
             except Exception as exc:
                 logger.error("Clause analysis failed", clause_id=clause_id, error=str(exc))
@@ -148,6 +169,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 f"{clause_id}: {decision} ({completed}/{total})",
                 clause_id=clause_id, decision=decision,
                 completed=completed, total=total, gap_count=gap_count,
+                redis_client=redis,
             )
 
         logger.info(
@@ -164,7 +186,8 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
         )
 
         await emit(tenant_id, analysis_id, "complete", "done",
-                   f"Analysis complete — {gap_count} gaps found")
+                   f"Analysis complete — {gap_count} gaps found",
+                   redis_client=redis)
 
         await _publish_gaps_ready(AnalysisGapsReady(
             tenant_id=tenant_id,
@@ -178,8 +201,11 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             {"analysis_id": analysis_id, "tenant_id": tenant_id},
             {"$set": {"status": "failed", "error": str(exc)}},
         )
-        await emit(tenant_id, analysis_id, "complete", "failed", str(exc))
+        await emit(tenant_id, analysis_id, "complete", "failed", str(exc),
+                   redis_client=redis)
         raise
+    finally:
+        await redis.aclose()
 
 
 async def _publish_gaps_ready(event: AnalysisGapsReady) -> None:
