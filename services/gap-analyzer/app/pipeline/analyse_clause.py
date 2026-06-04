@@ -117,7 +117,7 @@ async def analyse_clause(
             max_tokens=8192,
             temperature=0.0,
             response_format={"type": "json_object"},
-            on_thinking=None,  # state_compare is an intermediate step — keep terminal clean
+            on_thinking=None,  # state_compare is internal bookkeeping — only show gap reasoning
         )
         state_diff = json.loads(answer)
     except Exception as exc:

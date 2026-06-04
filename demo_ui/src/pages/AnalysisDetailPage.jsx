@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   getAnalysis, pauseAnalysis, resumeAnalysis,
@@ -12,10 +12,17 @@ const ACTIVE = ['pending', 'running']
 const DONE   = ['complete', 'failed', 'paused']
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
-function ProgressPanel({ analysisId }) {
-  const { messages, isConnected } = useJobProgress(analysisId)
+function ProgressPanel({ analysisId, currentClauseId = null }) {
+  const [thinkingText, setThinkingText] = useState('')
+  const terminalRef = useRef()
   const bottomRef = useRef()
   const [fetchedCompleted, setFetchedCompleted] = useState(0)
+
+  const { messages, isConnected } = useJobProgress(analysisId, {
+    onThinkingToken: useCallback((m) => {
+      setThinkingText(prev => prev + m.detail)
+    }, []),
+  })
 
   // Seed the initial completed count from persisted results so a page reload
   // shows the correct number immediately, before any WS event arrives.
@@ -25,8 +32,9 @@ function ProgressPanel({ analysisId }) {
       .catch(() => {})
   }, [analysisId])
 
-  const { completed: wsCompleted, total, gapCount, thinkingClause, thinkingText, clauseLog } = useMemo(() => {
-    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingText = ''
+  // Derive structural state from messages only (no thinking_token events here)
+  const { completed: wsCompleted, total, gapCount, thinkingClause, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null
     const clauseLog = []
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
@@ -34,24 +42,26 @@ function ProgressPanel({ analysisId }) {
       if (m.gap_count != null) gapCount = m.gap_count
       if (m.stage === 'thinking') {
         thinkingClause = m.clause_id || null
-        thinkingText = ''               // new clause — reset terminal
-      } else if (m.stage === 'thinking_token') {
-        thinkingText += m.detail        // accumulate reasoning text
-        if (!thinkingClause && m.clause_id) thinkingClause = m.clause_id  // recover on reload
       } else if (m.stage === 'clause') {
         thinkingClause = null
-        thinkingText = ''
         if (m.clause_id) clauseLog.push({ clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, thinkingText, clauseLog }
+    return { completed, total, gapCount, thinkingClause, clauseLog }
+  }, [messages])
+
+  // Reset terminal text when a new clause starts or when one completes
+  useEffect(() => {
+    const last = messages[messages.length - 1]
+    if (last && (last.stage === 'thinking' || last.stage === 'clause')) {
+      setThinkingText('')
+    }
   }, [messages])
 
   // WS events are authoritative once they arrive; fetchedCompleted is the floor
   // so the counter never shows 0 on a fresh page load for a running analysis.
   const completed = Math.max(wsCompleted, fetchedCompleted)
 
-  const terminalRef = useRef()
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight
@@ -95,7 +105,7 @@ function ProgressPanel({ analysisId }) {
         />
       </div>
 
-      {/* Thinking terminal — shows live LLM reasoning stream.
+      {/* Thinking terminal — shows live compliance reasoning for the current clause.
           Also shown when connected but no events yet (page reload mid-analysis). */}
       {(thinkingClause || thinkingText || (isConnected && messages.length === 0)) && (
         <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden">
@@ -103,15 +113,19 @@ function ProgressPanel({ analysisId }) {
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 opacity-70" />
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 opacity-70" />
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" />
-            <span className="text-xs text-gray-400 ml-1 font-mono">
-              🔍 reasoning — clause {thinkingClause || '…'}
+            <span className="text-xs text-gray-400 ml-2 font-mono">
+              Compliance reasoning — clause {thinkingClause || currentClauseId || '…'}
             </span>
           </div>
           <div
             ref={terminalRef}
-            className="px-3 py-2 font-mono text-xs text-green-400 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin"
+            className="px-4 py-3 font-mono text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto scrollbar-thin"
           >
-            {thinkingText || <span className="animate-pulse text-gray-500">Reconnecting to live stream…</span>}
+            {thinkingText || (
+              <span className="text-gray-600 italic">
+                {isConnected && messages.length === 0 ? 'Reconnecting to live stream…' : 'Preparing analysis…'}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -402,7 +416,7 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Live progress */}
-      {isActive && <ProgressPanel analysisId={id} />}
+      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} />}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">

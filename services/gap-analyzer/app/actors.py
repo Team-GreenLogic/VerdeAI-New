@@ -114,18 +114,18 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                            redis_client=redis)
                 return  # ack cleanly; resume will re-publish the event
 
+            # Persist current clause so a page reload can show the right clause number
+            # even while no WS events are flowing (e.g. during silent state_compare).
+            await db.analyses.update_one(
+                {"analysis_id": analysis_id, "tenant_id": tenant_id},
+                {"$set": {"current_clause_id": clause_id}},
+            )
+
             await emit(
                 tenant_id, analysis_id, "thinking", "progress",
                 f"Analysing clause {clause_id}…",
                 clause_id=clause_id, completed=completed, total=total, gap_count=gap_count,
                 redis_client=redis,
-            )
-            # Emit one static token immediately so the terminal shows on page reload
-            # even while state_compare is running silently.
-            await emit(
-                tenant_id, analysis_id, "thinking_token", "progress",
-                "Comparing organisational state…\n",
-                clause_id=clause_id, redis_client=redis,
             )
 
             # Capture clause_id for the closure (safe — analyse_clause is awaited
