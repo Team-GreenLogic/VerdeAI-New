@@ -17,6 +17,9 @@ export default {
           900: '#14532d',
         },
       },
+      backgroundImage: {
+        'sidebar-gradient': 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
+      },
     },
   },
   plugins: [],

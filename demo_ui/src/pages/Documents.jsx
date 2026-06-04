@@ -4,6 +4,18 @@ import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 
+const UploadSVG = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 5.75 5.75 0 011.021 8.266A3.5 3.5 0 0115 19.5H6.75z" />
+  </svg>
+)
+
+const InboxSVG = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z" />
+  </svg>
+)
+
 function ProgressPanel({ jobId, filename, onDone }) {
   const { messages, status, isConnected } = useJobProgress(jobId)
 
@@ -14,22 +26,24 @@ function ProgressPanel({ jobId, filename, onDone }) {
   }, [status, onDone])
 
   return (
-    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 mb-4">
-      <div className="flex items-center gap-2 mb-2">
+    <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         {!status && <Spinner size="sm" />}
-        <span className="text-sm font-semibold text-blue-800">
-          Processing: {filename}
+        <span className="text-sm font-semibold text-slate-700 truncate flex-1">
+          {filename}
         </span>
-        {status && <Badge status={status} />}
+        {status ? <Badge status={status} /> : (
+          <span className="text-xs text-slate-400">{isConnected ? 'Processing…' : 'Connecting…'}</span>
+        )}
       </div>
-      <div className="max-h-28 overflow-y-auto space-y-1 scrollbar-thin">
+      <div className="max-h-28 overflow-y-auto space-y-1 scrollbar-thin bg-slate-900 rounded-lg p-3">
         {messages.map((m, i) => (
-          <p key={i} className="text-xs text-blue-700">
+          <p key={i} className="text-xs text-emerald-300 font-mono">
             [{m.stage}] {m.detail}
           </p>
         ))}
         {messages.length === 0 && (
-          <p className="text-xs text-blue-500">Waiting for progress…</p>
+          <p className="text-xs text-slate-500 font-mono">Waiting for progress…</p>
         )}
       </div>
     </div>
@@ -40,7 +54,7 @@ export default function Documents() {
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [activeJobs, setActiveJobs] = useState([]) // [{jobId, filename}]
+  const [activeJobs, setActiveJobs] = useState([])
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef()
 
@@ -88,9 +102,14 @@ export default function Documents() {
     refresh()
   }
 
+  const FORMATS = ['PDF', 'DOCX', 'TXT', 'XLSX', 'PPTX']
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Documents</h1>
+        <p className="text-sm text-slate-500 mt-1">Upload compliance evidence documents for analysis</p>
+      </div>
 
       {/* Upload zone */}
       <div
@@ -98,8 +117,8 @@ export default function Documents() {
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onClick={() => fileRef.current?.click()}
-        className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-          dragOver ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-brand-300'
+        className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-all ${
+          dragOver ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-brand-400 hover:bg-slate-50'
         }`}
       >
         <input
@@ -110,16 +129,25 @@ export default function Documents() {
           onChange={e => handleFiles(e.target.files)}
         />
         {uploading ? (
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-3">
             <Spinner size="lg" />
-            <p className="text-sm text-gray-500">Uploading…</p>
+            <p className="text-sm text-slate-500">Uploading…</p>
           </div>
         ) : (
-          <>
-            <p className="text-3xl mb-2">📤</p>
-            <p className="text-sm font-medium text-gray-700">Drop a file here or click to upload</p>
-            <p className="text-xs text-gray-400 mt-1">PDF, DOCX, TXT, XLSX, PPTX — max 100 MB</p>
-          </>
+          <div className="flex flex-col items-center gap-3">
+            <span className="text-slate-300">
+              <UploadSVG />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Drop a file here or click to upload</p>
+              <p className="text-xs text-slate-400 mt-1">Max 100 MB</p>
+            </div>
+            <div className="flex gap-1.5 flex-wrap justify-center">
+              {FORMATS.map(f => (
+                <span key={f} className="rounded-full bg-slate-100 text-slate-500 text-xs px-2 py-0.5 font-medium">{f}</span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
@@ -137,37 +165,40 @@ export default function Documents() {
       {loading ? (
         <div className="flex justify-center py-10"><Spinner size="lg" /></div>
       ) : docs.length === 0 ? (
-        <div className="rounded-xl bg-white border border-gray-100 p-10 text-center text-gray-400">
-          <p className="text-3xl mb-2">📭</p>
-          <p className="text-sm">No documents yet. Upload one to get started.</p>
+        <div className="rounded-xl bg-white border border-slate-200 p-12 text-center">
+          <div className="flex justify-center text-slate-300 mb-3">
+            <InboxSVG />
+          </div>
+          <p className="text-sm font-semibold text-slate-600">No documents yet</p>
+          <p className="text-xs text-slate-400 mt-1">Upload your first document to get started.</p>
         </div>
       ) : (
-        <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Filename</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Pages</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Uploaded</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Filename</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Pages</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Uploaded</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-100">
               {docs.map(doc => (
-                <tr key={doc.document_id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800 max-w-xs truncate">
+                <tr key={doc.document_id} className="hover:bg-brand-50/40 transition-colors">
+                  <td className="px-4 py-3 font-medium text-slate-800 max-w-xs truncate">
                     {doc.filename}
                   </td>
                   <td className="px-4 py-3"><Badge status={doc.status} /></td>
-                  <td className="px-4 py-3 text-gray-500">{doc.pages ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">
+                  <td className="px-4 py-3 text-slate-500">{doc.pages ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">
                     {new Date(doc.uploaded_at || doc.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleDelete(doc.document_id)}
-                      className="text-xs text-red-500 hover:text-red-700"
+                      className="text-xs font-medium text-slate-400 hover:text-red-500 border border-slate-200 hover:border-red-200 rounded-md px-2 py-1 transition-colors"
                     >
                       Delete
                     </button>
