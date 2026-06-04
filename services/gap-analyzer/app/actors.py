@@ -120,6 +120,13 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 clause_id=clause_id, completed=completed, total=total, gap_count=gap_count,
                 redis_client=redis,
             )
+            # Emit one static token immediately so the terminal shows on page reload
+            # even while state_compare is running silently.
+            await emit(
+                tenant_id, analysis_id, "thinking_token", "progress",
+                "Comparing organisational state…\n",
+                clause_id=clause_id, redis_client=redis,
+            )
 
             # Capture clause_id for the closure (safe — analyse_clause is awaited
             # before the next iteration, so clause_id is stable for this call).
@@ -131,22 +138,9 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                     token, clause_id=_id, redis_client=redis,
                 )
 
-            async def on_phase_change(
-                *, _id: str = _cid, _comp: int = completed, _tot: int = total, _gaps: int = gap_count
-            ) -> None:
-                # Re-emit the thinking event so the frontend resets thinkingText
-                # between state_compare and gap_analyse — prevents double accumulation.
-                await emit(
-                    tenant_id, analysis_id, "thinking", "progress",
-                    f"Analysing clause {_id}…",
-                    clause_id=_id, completed=_comp, total=_tot, gap_count=_gaps,
-                    redis_client=redis,
-                )
-
             try:
                 result = await analyse_clause(db, tenant_id, analysis_id, clause,
-                                              on_thinking=on_thinking,
-                                              on_phase_change=on_phase_change)
+                                              on_thinking=on_thinking)
                 decision = result.get("decision", "Unknown")
                 if decision != "Met":
                     gap_count += 1

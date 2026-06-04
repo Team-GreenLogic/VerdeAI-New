@@ -95,29 +95,30 @@ function ProgressPanel({ analysisId }) {
         />
       </div>
 
-      {/* Thinking terminal — shows live LLM reasoning stream */}
-      {(thinkingClause || thinkingText) && (
+      {/* Thinking terminal — shows live LLM reasoning stream.
+          Also shown when connected but no events yet (page reload mid-analysis). */}
+      {(thinkingClause || thinkingText || (isConnected && messages.length === 0)) && (
         <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 opacity-70" />
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 opacity-70" />
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" />
             <span className="text-xs text-gray-400 ml-1 font-mono">
-              🔍 reasoning — clause {thinkingClause}
+              🔍 reasoning — clause {thinkingClause || '…'}
             </span>
           </div>
           <div
             ref={terminalRef}
             className="px-3 py-2 font-mono text-xs text-green-400 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin"
           >
-            {thinkingText || <span className="animate-pulse">▋</span>}
+            {thinkingText || <span className="animate-pulse text-gray-500">Reconnecting to live stream…</span>}
           </div>
         </div>
       )}
 
       {/* Clause decision log */}
       <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
-        {clauseLog.length === 0 && !thinkingClause && (
+        {clauseLog.length === 0 && !thinkingClause && messages.length > 0 && (
           <p className="text-xs text-blue-400 pl-1">Waiting for clause results…</p>
         )}
         {clauseLog.map((entry, i) => (
