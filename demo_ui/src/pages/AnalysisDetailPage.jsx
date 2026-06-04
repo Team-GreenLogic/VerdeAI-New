@@ -28,13 +28,13 @@ const XCircle = () => (
 )
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
-function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0 }) {
+function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
   const [thinkingText, setThinkingText] = useState('')
   const terminalRef = useRef()
   const bottomRef = useRef()
   const [fetchedCompleted, setFetchedCompleted] = useState(0)
 
-  const { messages, isConnected } = useJobProgress(analysisId, {
+  const { messages, status, isConnected } = useJobProgress(analysisId, {
     onThinkingToken: useCallback((m) => {
       setThinkingText(prev => prev + m.detail)
     }, []),
@@ -46,8 +46,8 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       .catch(() => {})
   }, [analysisId])
 
-  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, clauseLog } = useMemo(() => {
-    let completed = 0, total = 32, gapCount = 0, thinkingClause = null
+  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null
     const clauseLog = []
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
@@ -55,20 +55,32 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       if (m.gap_count != null) gapCount = m.gap_count
       if (m.stage === 'thinking') {
         thinkingClause = m.clause_id || null
+        thinkingDetail = m.detail || null
       } else if (m.stage === 'clause') {
         thinkingClause = null
+        thinkingDetail = null
         if (m.clause_id) clauseLog.push({ clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, clauseLog }
+    return { completed, total, gapCount, thinkingClause, thinkingDetail, clauseLog }
   }, [messages])
 
   useEffect(() => {
     const last = messages[messages.length - 1]
-    if (last && (last.stage === 'thinking' || last.stage === 'clause')) {
+    if (last?.stage === 'thinking' || last?.stage === 'clause') {
       setThinkingText('')
     }
+    if (last?.stage === 'clause') {
+      onClauseComplete?.()
+    }
   }, [messages])
+
+  // Notify parent immediately when WS signals the analysis is done/failed
+  useEffect(() => {
+    if (status === 'done' || status === 'failed') {
+      onAnalysisDone?.()
+    }
+  }, [status])
 
   const completed = Math.max(wsCompleted, fetchedCompleted)
   const gapCount = wsGapCount > 0 ? wsGapCount : initialGapCount
@@ -140,7 +152,9 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
             className="px-4 py-3 font-mono text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto scrollbar-thin"
           >
             {thinkingText || (
-              <span className="text-gray-600 italic">Preparing analysis…</span>
+              <span className="text-gray-500 italic">
+                {thinkingDetail || 'Preparing analysis…'}
+              </span>
             )}
           </div>
         </div>
@@ -173,14 +187,14 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
 }
 
 // ── Gap Results Tab ──────────────────────────────────────────────────────────
-function GapResultsTab({ analysisId }) {
+function GapResultsTab({ analysisId, version }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
     getResults(analysisId).then(r => { setResults(r || []); setLoading(false) })
-  }, [analysisId])
+  }, [analysisId, version])
 
   if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
   if (!results.length) return <p className="text-sm text-slate-400 py-6">No results yet.</p>
@@ -269,13 +283,13 @@ function GapResultsTab({ analysisId }) {
 }
 
 // ── Recommendations Tab ──────────────────────────────────────────────────────
-function RecommendationsTab({ analysisId }) {
+function RecommendationsTab({ analysisId, version }) {
   const [recs, setRecs] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     getRecommendations(analysisId).then(r => { setRecs(r || []); setLoading(false) })
-  }, [analysisId])
+  }, [analysisId, version])
 
   if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
   if (!recs.length) return <p className="text-sm text-slate-400 py-6">No recommendations yet. Run and complete an analysis first.</p>
@@ -318,14 +332,14 @@ function RecommendationsTab({ analysisId }) {
 }
 
 // ── Missing Requirements Tab ─────────────────────────────────────────────────
-function MissingRequirementsTab({ analysisId }) {
+function MissingRequirementsTab({ analysisId, version }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(null)
 
   useEffect(() => {
     getMissingRequirements(analysisId).then(r => { setItems(r || []); setLoading(false) })
-  }, [analysisId])
+  }, [analysisId, version])
 
   if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
   if (!items.length) return <p className="text-sm text-slate-400 py-6">No missing requirement requests yet.</p>
@@ -379,11 +393,21 @@ export default function AnalysisDetailPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('results')
   const [actioning, setActioning] = useState(false)
+  const [resultVersion, setResultVersion] = useState(0)
 
   async function refresh() {
     const a = await getAnalysis(id).catch(() => null)
     setAnalysis(a)
   }
+
+  const handleClauseComplete = useCallback(() => {
+    setResultVersion(v => v + 1)
+  }, [])
+
+  const handleAnalysisDone = useCallback(() => {
+    setResultVersion(v => v + 1)
+    refresh()
+  }, [])
 
   useEffect(() => {
     refresh().finally(() => setLoading(false))
@@ -466,7 +490,7 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Live progress */}
-      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} />}
+      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} onClauseComplete={handleClauseComplete} onAnalysisDone={handleAnalysisDone} />}
 
       {/* Pill tabs */}
       <div className="overflow-x-auto">
@@ -488,9 +512,9 @@ export default function AnalysisDetailPage() {
       </div>
 
       <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-5">
-        {tab === 'results'          && <GapResultsTab analysisId={id} />}
-        {tab === 'recommendations'  && <RecommendationsTab analysisId={id} />}
-        {tab === 'missing'          && <MissingRequirementsTab analysisId={id} />}
+        {tab === 'results'          && <GapResultsTab analysisId={id} version={resultVersion} />}
+        {tab === 'recommendations'  && <RecommendationsTab analysisId={id} version={resultVersion} />}
+        {tab === 'missing'          && <MissingRequirementsTab analysisId={id} version={resultVersion} />}
       </div>
     </div>
   )

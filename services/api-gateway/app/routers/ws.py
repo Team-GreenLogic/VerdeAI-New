@@ -83,6 +83,7 @@ async def ws_jobs(
 
         terminal_in_history = False
         disconnected = False
+        last_hist_stage: str | None = None
         for msg_str in history:
             try:
                 await websocket.send_text(msg_str)
@@ -90,10 +91,29 @@ async def ws_jobs(
                 disconnected = True
                 break
             try:
-                if json.loads(msg_str).get("status") in ("done", "failed", "deduped"):
+                ev = json.loads(msg_str)
+                if ev.get("status") in ("done", "failed", "deduped"):
                     terminal_in_history = True
+                last_hist_stage = ev.get("stage")
             except (json.JSONDecodeError, AttributeError):
                 pass
+
+        # If the last structural event was a 'thinking' event the analysis is
+        # mid-clause — replay the bounded thinking-token buffer so the client
+        # sees partial reasoning from the current clause.
+        if not disconnected and not terminal_in_history and last_hist_stage == "thinking":
+            r_tok = _redis()
+            try:
+                tokens_key = f"glassbox_tokens.{tenant_id}.{job_id}"
+                tokens: list[str] = await r_tok.lrange(tokens_key, 0, -1)
+            finally:
+                await r_tok.aclose()
+            for tok_str in tokens:
+                try:
+                    await websocket.send_text(tok_str)
+                except WebSocketDisconnect:
+                    disconnected = True
+                    break
 
         # If the job already finished (terminal event was in history) or the
         # client dropped during replay, skip the live pubsub loop.

@@ -6,6 +6,9 @@ import redis.asyncio as aioredis
 
 from verdeai_shared.settings import settings
 
+_HIST_TTL = 7200  # 2 hours
+_MAX_TOKENS = 1000  # cap per-clause thinking token replay
+
 
 async def emit(
     tenant_id: str,
@@ -23,8 +26,12 @@ async def emit(
 ) -> None:
     """Publish a progress event to the glass-box channel for this job.
 
-    Pass redis_client to reuse an existing connection (e.g. for high-frequency
-    per-token thinking events). If omitted a new connection is created and closed.
+    Structural events (everything except thinking_token) are appended to a
+    Redis list so reconnecting clients can replay full clause progress.
+
+    thinking_token events are stored in a separate bounded list that is reset
+    on each new clause (thinking event), keeping only the current clause's
+    partial reasoning for replay.
     """
     payload: dict = {"stage": stage, "status": status, "detail": detail}
     if completed is not None:
@@ -37,11 +44,29 @@ async def emit(
         payload["decision"] = decision
     if gap_count is not None:
         payload["gap_count"] = gap_count
+
     channel = f"glassbox.{tenant_id}.{job_id}"
+    hist_key = f"glassbox_hist.{tenant_id}.{job_id}"
+    tokens_key = f"glassbox_tokens.{tenant_id}.{job_id}"
+    serialized = json.dumps(payload)
+
     own_client = redis_client is None
     r: aioredis.Redis = redis_client if redis_client is not None else aioredis.from_url(settings.REDIS_URL)  # type: ignore[type-arg]
     try:
-        await r.publish(channel, json.dumps(payload))
+        await r.publish(channel, serialized)
+
+        if stage == "thinking_token":
+            # Bounded per-clause token buffer — keep only the last _MAX_TOKENS
+            await r.rpush(tokens_key, serialized)
+            await r.ltrim(tokens_key, -_MAX_TOKENS, -1)
+            await r.expire(tokens_key, _HIST_TTL)
+        else:
+            # Structural event — append to main history list
+            await r.rpush(hist_key, serialized)
+            await r.expire(hist_key, _HIST_TTL)
+            if stage == "thinking":
+                # New clause starting — discard previous clause's token buffer
+                await r.delete(tokens_key)
     finally:
         if own_client:
             await r.aclose()
