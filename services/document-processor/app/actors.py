@@ -7,6 +7,7 @@ from aio_pika import IncomingMessage
 from loguru import logger
 
 from verdeai_shared.messaging.connection import get_channel
+from verdeai_shared.db.repositories.hash_store import HashStoreRepository
 from verdeai_shared.messaging.events import DocumentDeleted, DocumentReady, DocumentUploaded
 from verdeai_shared.retrieval.bm25 import remove_document_from_bm25_index
 
@@ -151,6 +152,11 @@ async def handle_document_deleted(message: IncomingMessage) -> None:
         document_id=document_id,
         count=result.deleted_count,
     )
+
+    # Remove hash_store entry so the same file can be re-uploaded cleanly
+    hash_repo = HashStoreRepository(db, tenant_id)
+    await hash_repo.delete_by_document(document_id)
+    logger.info("Hash store entry deleted", tenant_id=tenant_id, document_id=document_id)
 
 
 async def _publish_ready(event: DocumentReady) -> None:

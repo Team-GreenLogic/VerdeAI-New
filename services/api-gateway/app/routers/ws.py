@@ -64,30 +64,57 @@ async def ws_jobs(
 
     await websocket.accept()
     channel = f"glassbox.{tenant_id}.{job_id}"
+    hist_key = f"glassbox_hist.{tenant_id}.{job_id}"
     logger.info("WS client connected", job_id=job_id, tenant_id=tenant_id)
 
     r_sub = _redis()
     pubsub = r_sub.pubsub()
     try:
+        # Subscribe before reading history to avoid a race where a new event
+        # arrives after LRANGE but before SUBSCRIBE.
         await pubsub.subscribe(channel)
 
-        async for raw_message in pubsub.listen():
-            if raw_message["type"] != "message":
-                continue
+        # Replay stored history so reconnecting clients catch up.
+        r_hist = _redis()
+        try:
+            history: list[str] = await r_hist.lrange(hist_key, 0, -1)
+        finally:
+            await r_hist.aclose()
 
-            data_str: str = raw_message["data"]
+        terminal_in_history = False
+        disconnected = False
+        for msg_str in history:
             try:
-                await websocket.send_text(data_str)
+                await websocket.send_text(msg_str)
             except WebSocketDisconnect:
+                disconnected = True
                 break
-
-            # Check for terminal event
             try:
-                payload = json.loads(data_str)
-                if payload.get("status") in ("done", "failed", "deduped"):
-                    break
+                if json.loads(msg_str).get("status") in ("done", "failed", "deduped"):
+                    terminal_in_history = True
             except (json.JSONDecodeError, AttributeError):
                 pass
+
+        # If the job already finished (terminal event was in history) or the
+        # client dropped during replay, skip the live pubsub loop.
+        if not terminal_in_history and not disconnected:
+            async for raw_message in pubsub.listen():
+                if raw_message["type"] != "message":
+                    continue
+
+                data_str: str = raw_message["data"]
+                try:
+                    await websocket.send_text(data_str)
+                except WebSocketDisconnect:
+                    break
+
+                # Check for terminal event
+                try:
+                    payload = json.loads(data_str)
+                    if payload.get("status") in ("done", "failed", "deduped"):
+                        break
+                except (json.JSONDecodeError, AttributeError):
+                    pass
 
     except WebSocketDisconnect:
         logger.info("WS client disconnected", job_id=job_id)

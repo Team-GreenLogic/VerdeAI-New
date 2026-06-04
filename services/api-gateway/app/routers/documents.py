@@ -43,8 +43,8 @@ async def upload_document(
     filename = file.filename or "unknown"
     sha256 = hashlib.sha256(data).hexdigest()
 
-    # Check for duplicate (same sha256 for this tenant)
-    existing = await db.documents.find_one({"tenant_id": tenant_id, "sha256": sha256})
+    # Check for duplicate (same sha256 for this tenant, ignoring deleted docs)
+    existing = await db.documents.find_one({"tenant_id": tenant_id, "sha256": sha256, "status": {"$ne": "deleted"}})
     if existing is not None:
         doc_id = str(existing["_id"])
         logger.info("Dedup hit — returning existing document", document_id=doc_id)

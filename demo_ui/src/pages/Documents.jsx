@@ -64,7 +64,25 @@ export default function Documents() {
   }
 
   useEffect(() => {
-    refresh().finally(() => setLoading(false))
+    async function init() {
+      try {
+        const data = await listDocuments().catch(() => ({ items: [] }))
+        const items = Array.isArray(data) ? data : data?.items || []
+        setDocs(items)
+
+        // Recover any jobs that were still processing before a page reload.
+        const TERMINAL = new Set(['ready', 'failed', 'deduped', 'deleted'])
+        const recovering = items
+          .filter(doc => !TERMINAL.has(doc.status))
+          .map(doc => ({ jobId: doc.document_id, filename: doc.filename }))
+        if (recovering.length > 0) {
+          setActiveJobs(recovering)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    init()
   }, [])
 
   async function handleFiles(files) {

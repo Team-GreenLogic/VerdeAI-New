@@ -36,6 +36,9 @@ class HashStoreRepository(BaseRepository):
             upsert=True,
         )
 
+    async def delete_by_document(self, document_id: str) -> None:
+        await self._col.delete_one(self._filter({"document_id": document_id}))
+
     async def get_fastcdc_chunks(self, sha256: str) -> list[str]:
         doc = await self._col.find_one(
             self._filter({"sha256": sha256}),
