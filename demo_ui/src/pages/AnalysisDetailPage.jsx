@@ -12,7 +12,7 @@ const ACTIVE = ['pending', 'running']
 const DONE   = ['complete', 'failed', 'paused']
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
-function ProgressPanel({ analysisId, currentClauseId = null }) {
+function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0 }) {
   const [thinkingText, setThinkingText] = useState('')
   const terminalRef = useRef()
   const bottomRef = useRef()
@@ -24,16 +24,15 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
     }, []),
   })
 
-  // Seed the initial completed count from persisted results so a page reload
-  // shows the correct number immediately, before any WS event arrives.
+  // Seed initial completed count from persisted results so page reload shows correctly.
   useEffect(() => {
     getResults(analysisId)
       .then(r => setFetchedCompleted((r || []).length))
       .catch(() => {})
   }, [analysisId])
 
-  // Derive structural state from messages only (no thinking_token events here)
-  const { completed: wsCompleted, total, gapCount, thinkingClause, clauseLog } = useMemo(() => {
+  // Derive structural state — messages never contains thinking_token events
+  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, clauseLog } = useMemo(() => {
     let completed = 0, total = 32, gapCount = 0, thinkingClause = null
     const clauseLog = []
     for (const m of messages) {
@@ -50,7 +49,7 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
     return { completed, total, gapCount, thinkingClause, clauseLog }
   }, [messages])
 
-  // Reset terminal text when a new clause starts or when one completes
+  // Reset terminal when a new clause starts or one completes
   useEffect(() => {
     const last = messages[messages.length - 1]
     if (last && (last.stage === 'thinking' || last.stage === 'clause')) {
@@ -58,14 +57,16 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
     }
   }, [messages])
 
-  // WS events are authoritative once they arrive; fetchedCompleted is the floor
-  // so the counter never shows 0 on a fresh page load for a running analysis.
   const completed = Math.max(wsCompleted, fetchedCompleted)
+  // Use WS gap count once events arrive; fall back to the polled analysis.gap_count
+  const gapCount = wsGapCount > 0 ? wsGapCount : initialGapCount
+
+  // Active clause = live WS event or, on reload, the DB-persisted currentClauseId
+  const activeClause = thinkingClause || (messages.length === 0 ? currentClauseId : null)
 
   useEffect(() => {
-    if (terminalRef.current) {
+    if (terminalRef.current)
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight
-    }
   }, [thinkingText])
 
   useEffect(() => {
@@ -83,9 +84,12 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
+          {/* Only show reconnecting after first connect attempt; avoids flicker on load */}
           {isConnected
             ? <Spinner size="sm" />
-            : <span className="text-yellow-500 text-xs">⚡ Reconnecting…</span>}
+            : messages.length > 0
+              ? <span className="text-yellow-500 text-xs">⚡ Reconnecting…</span>
+              : <Spinner size="sm" />}
           <span className="text-sm font-semibold text-blue-800">
             Live Progress — {completed}/{total} clauses
           </span>
@@ -105,16 +109,15 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
         />
       </div>
 
-      {/* Thinking terminal — shows live compliance reasoning for the current clause.
-          Also shown when connected but no events yet (page reload mid-analysis). */}
-      {(thinkingClause || thinkingText || (isConnected && messages.length === 0)) && (
+      {/* Thinking terminal — only show when a clause is active (live or from DB) */}
+      {(activeClause || thinkingText) && (
         <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 opacity-70" />
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 opacity-70" />
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" />
             <span className="text-xs text-gray-400 ml-2 font-mono">
-              Compliance reasoning — clause {thinkingClause || currentClauseId || '…'}
+              Compliance reasoning — clause {activeClause || '…'}
             </span>
           </div>
           <div
@@ -122,9 +125,7 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
             className="px-4 py-3 font-mono text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto scrollbar-thin"
           >
             {thinkingText || (
-              <span className="text-gray-600 italic">
-                {isConnected && messages.length === 0 ? 'Reconnecting to live stream…' : 'Preparing analysis…'}
-              </span>
+              <span className="text-gray-600 italic">Preparing analysis…</span>
             )}
           </div>
         </div>
@@ -132,8 +133,15 @@ function ProgressPanel({ analysisId, currentClauseId = null }) {
 
       {/* Clause decision log */}
       <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
-        {clauseLog.length === 0 && !thinkingClause && messages.length > 0 && (
-          <p className="text-xs text-blue-400 pl-1">Waiting for clause results…</p>
+        {clauseLog.length === 0 && !activeClause && (
+          <p className="text-xs text-blue-400 pl-1">Waiting for first clause result…</p>
+        )}
+        {/* Active clause indicator in the log */}
+        {activeClause && !clauseLog.find(e => e.clause_id === activeClause) && (
+          <div className="flex items-center gap-2 text-xs border rounded px-2 py-1 text-blue-700 bg-blue-50 border-blue-200 animate-pulse">
+            <span className="font-mono font-semibold w-10 flex-shrink-0">{activeClause}</span>
+            <span>Analysing…</span>
+          </div>
         )}
         {clauseLog.map((entry, i) => (
           <div
@@ -416,7 +424,7 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Live progress */}
-      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} />}
+      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} />}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
