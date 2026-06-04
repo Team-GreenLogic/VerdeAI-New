@@ -86,7 +86,8 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
     gap_count = sum(1 for r in existing if r.get("decision") != "Met")
 
     await emit(tenant_id, analysis_id, "analysis", "running",
-               f"Analysing {total} clauses ({completed} already complete)")
+               f"Analysing {total} clauses ({completed} already complete)",
+               completed=completed, total=total, gap_count=gap_count)
 
     try:
         for clause in clauses:
@@ -104,6 +105,12 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 await emit(tenant_id, analysis_id, "analysis", "paused",
                            f"Paused after {completed}/{total} clauses")
                 return  # ack cleanly; resume will re-publish the event
+
+            await emit(
+                tenant_id, analysis_id, "thinking", "progress",
+                f"Analysing clause {clause_id}…",
+                clause_id=clause_id, completed=completed, total=total, gap_count=gap_count,
+            )
 
             try:
                 result = await analyse_clause(db, tenant_id, analysis_id, clause)
@@ -139,6 +146,8 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             await emit(
                 tenant_id, analysis_id, "clause", "progress",
                 f"{clause_id}: {decision} ({completed}/{total})",
+                clause_id=clause_id, decision=decision,
+                completed=completed, total=total, gap_count=gap_count,
             )
 
         logger.info(

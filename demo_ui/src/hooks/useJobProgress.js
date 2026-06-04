@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiPost } from '../api/client.js'
 
 const WS_URL = import.meta.env.VITE_API_URL?.replace('http', 'ws') || 'ws://localhost:8000'
-const TERMINAL = new Set(['done', 'failed', 'deduped'])
+const TERMINAL = new Set(['done', 'failed', 'deduped', 'paused'])
 const MAX_RETRIES = 3
 
 /**

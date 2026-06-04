@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   getAnalysis, pauseAnalysis, resumeAnalysis,
@@ -12,36 +12,86 @@ const ACTIVE = ['pending', 'running']
 const DONE   = ['complete', 'failed', 'paused']
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
-function ProgressPanel({ analysisId, total = 32 }) {
+function ProgressPanel({ analysisId }) {
   const { messages, isConnected } = useJobProgress(analysisId)
   const bottomRef = useRef()
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const { completed, total, gapCount, thinkingClause, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null
+    const clauseLog = []
+    for (const m of messages) {
+      if (m.completed != null) completed = m.completed
+      if (m.total != null) total = m.total
+      if (m.gap_count != null) gapCount = m.gap_count
+      if (m.stage === 'thinking') {
+        thinkingClause = m.clause_id || null
+      } else if (m.stage === 'clause') {
+        thinkingClause = null
+        if (m.clause_id) clauseLog.push({ clause_id: m.clause_id, decision: m.decision || '' })
+      }
+    }
+    return { completed, total, gapCount, thinkingClause, clauseLog }
   }, [messages])
 
-  const clauseMsgs = messages.filter(m => m.stage === 'clause')
-  const completed = clauseMsgs.length
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [clauseLog.length, thinkingClause])
+
+  const decisionStyle = (d) => {
+    if (d === 'Met') return 'text-green-700 bg-green-50 border-green-100'
+    if (d === 'Insufficient Evidence') return 'text-yellow-700 bg-yellow-50 border-yellow-100'
+    return 'text-red-700 bg-red-50 border-red-100'
+  }
 
   return (
     <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        {isConnected ? <Spinner size="sm" /> : <span className="text-yellow-500 text-xs">⚡ Reconnecting…</span>}
-        <span className="text-sm font-semibold text-blue-800">
-          Live Progress — {completed}/{total} clauses
-        </span>
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {isConnected
+            ? <Spinner size="sm" />
+            : <span className="text-yellow-500 text-xs">⚡ Reconnecting…</span>}
+          <span className="text-sm font-semibold text-blue-800">
+            Live Progress — {completed}/{total} clauses
+          </span>
+        </div>
+        {gapCount > 0 && (
+          <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-full px-2 py-0.5">
+            {gapCount} gap{gapCount !== 1 ? 's' : ''} found
+          </span>
+        )}
       </div>
+
+      {/* Progress bar */}
       <div className="h-2 rounded-full bg-blue-100">
         <div
-          className="h-2 rounded-full bg-blue-500 transition-all"
+          className="h-2 rounded-full bg-blue-500 transition-all duration-500"
           style={{ width: `${Math.min((completed / total) * 100, 100)}%` }}
         />
       </div>
-      <div className="max-h-40 overflow-y-auto space-y-1 scrollbar-thin text-xs text-blue-700">
-        {messages.map((m, i) => (
-          <p key={i}>[{m.stage}] {m.detail}</p>
+
+      {/* Thinking indicator */}
+      {thinkingClause && (
+        <div className="flex items-center gap-2 text-xs text-blue-600 animate-pulse">
+          <span>🔍</span>
+          <span>Analysing clause {thinkingClause}…</span>
+        </div>
+      )}
+
+      {/* Clause decision log */}
+      <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
+        {clauseLog.length === 0 && !thinkingClause && (
+          <p className="text-xs text-blue-400 pl-1">Waiting for clause results…</p>
+        )}
+        {clauseLog.map((entry, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-2 text-xs border rounded px-2 py-1 ${decisionStyle(entry.decision)}`}
+          >
+            <span className="font-mono font-semibold w-10 flex-shrink-0">{entry.clause_id}</span>
+            <span>{entry.decision}</span>
+          </div>
         ))}
-        {messages.length === 0 && <p className="text-blue-400">Waiting for events…</p>}
         <div ref={bottomRef} />
       </div>
     </div>
