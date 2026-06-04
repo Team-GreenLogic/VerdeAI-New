@@ -225,17 +225,7 @@ function GapResultsTab({ analysisId }) {
             >
               <span className="font-mono text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5 w-12 text-center flex-shrink-0">{r.clause_id}</span>
               <Badge status={r.decision} />
-              <div className="flex-1 ml-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-brand-500"
-                      style={{ width: `${(r.confidence * 100).toFixed(0)}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-slate-400">{(r.confidence * 100).toFixed(0)}%</span>
-                </div>
-              </div>
+              <div className="flex-1" />
               <span className="text-slate-400">{expanded === r.clause_id ? <ChevronUp /> : <ChevronDown />}</span>
             </button>
             {expanded === r.clause_id && (
