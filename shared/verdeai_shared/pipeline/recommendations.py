@@ -51,8 +51,8 @@ async def generate_recommendations(
     org_profile_map = {e["field_path"]: e.get("value") for e in org_entries}
 
     # Render prompt
-    tmpl = _jinja.get_template("recommend.j2")
-    prompt = tmpl.render(
+    system_prompt = _jinja.get_template("recommend_system.j2").render()
+    user_prompt = _jinja.get_template("recommend_user.j2").render(
         clause_id=clause_id,
         clause_title=clause_title,
         decision=gap_result.get("decision", "Not Met"),
@@ -64,7 +64,10 @@ async def generate_recommendations(
     try:
         resp = await complete(
             model=settings.PRIMARY_REASONING_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
             max_tokens=1024,
             temperature=0.0,
             response_format={"type": "json_object"},

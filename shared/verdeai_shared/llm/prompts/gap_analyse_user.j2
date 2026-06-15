@@ -1,0 +1,27 @@
+Clause {{ clause_id }}: {{ clause_title }}
+
+ISO 14001 normative requirements:
+{{ clause_requirements }}
+
+Assertion-level state comparison (from prior analysis step):
+{{ state_diff_json }}
+
+Organisation profile reference values used in comparison:
+{{ reference_context_json }}
+
+Supporting evidence chunks (ranked by relevance):
+{{ evidence_chunks }}
+
+Required output schema:
+{
+  "decision": "Met|Partially Met|Not Met|Insufficient Evidence",
+  "confidence": <0.0-1.0>,
+  "reasoning": "<explicit chain-of-evidence referencing field_paths and Chunk N positions>",
+  "citations": [
+    {"type": "chunk", "chunk_id": "<id>", "page": <number>} |
+    {"type": "org_profile", "field_path": "<path>"}
+  ],
+  "missing_evidence": ["<specific document type or named data point needed>"]
+}
+
+Produce the JSON verdict now.

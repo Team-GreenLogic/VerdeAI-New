@@ -178,8 +178,8 @@ async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dic
     on_thinking: Callable[[str], Awaitable[None]] | None = cfg.get("on_thinking")
     state_diff: dict[str, Any] = {}
     try:
-        tmpl = _jinja.get_template("state_compare.j2")
-        prompt = tmpl.render(
+        system_prompt = _jinja.get_template("state_compare_system.j2").render()
+        user_prompt = _jinja.get_template("state_compare_user.j2").render(
             clause_id=clause_id,
             clause_title=clause_title,
             clause_requirements=clause.get("requirements", ""),
@@ -189,11 +189,14 @@ async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dic
         )
         answer = await stream_with_reasoning(
             model=settings.PRIMARY_REASONING_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
             max_tokens=8192,
             temperature=0.0,
             response_format={"type": "json_object"},
-            on_thinking=on_thinking,  # now exposed (was None before — state_compare reasoning visible)
+            on_thinking=on_thinking,
         )
         state_diff = json.loads(answer)
     except Exception as exc:
@@ -218,8 +221,8 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
     state_diff = state.get("state_diff", {})
     gap_result: dict[str, Any] = {}
     try:
-        tmpl = _jinja.get_template("gap_analyse.j2")
-        prompt = tmpl.render(
+        system_prompt = _jinja.get_template("gap_analyse_system.j2").render()
+        user_prompt = _jinja.get_template("gap_analyse_user.j2").render(
             clause_id=clause_id,
             clause_title=clause_title,
             clause_requirements=clause.get("requirements", ""),
@@ -229,7 +232,10 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
         )
         answer = await stream_with_reasoning(
             model=settings.PRIMARY_REASONING_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
             max_tokens=8192,
             temperature=0.0,
             response_format={"type": "json_object"},
