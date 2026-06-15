@@ -15,10 +15,19 @@ from verdeai_shared.db.repositories.recommendation_store import RecommendationSt
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
 
+try:
+    from langfuse.decorators import langfuse_context, observe  # type: ignore[import-untyped]
+    _LANGFUSE = True
+except ImportError:
+    _LANGFUSE = False
+    def observe(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[misc]
+        return lambda fn: fn
+
 _PROMPTS_DIR = Path(_vs_pkg.__file__).parent / "llm" / "prompts"
 _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=False)
 
 
+@observe(name="recommendation")  # type: ignore[misc]
 async def generate_recommendations(
     db: Any,
     tenant_id: str,
@@ -30,6 +39,17 @@ async def generate_recommendations(
     Idempotent: skips if recommendations already exist for this analysis_id + clause_id.
     """
     clause_id: str = gap_result["clause_id"]
+
+    if _LANGFUSE:
+        try:
+            langfuse_context.update_current_trace(
+                session_id=tenant_id,
+                user_id=tenant_id,
+                tags=["recommendation", clause_id],
+                metadata={"analysis_id": analysis_id, "clause_id": clause_id},
+            )
+        except Exception:
+            pass
 
     # Idempotency check
     existing = await db.recommendation_store.find_one(
@@ -71,6 +91,7 @@ async def generate_recommendations(
             max_tokens=1024,
             temperature=0.0,
             response_format={"type": "json_object"},
+            name="recommendation",
         )
         raw = json.loads(resp.choices[0].message.content)
         # LLM may return {"recommendations": [...]} or directly [...]

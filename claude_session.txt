@@ -35,3 +35,13 @@ docker compose build gap-analyzer && docker compose up -d gap-analyzer
 
 user3@example.com
 abc12345
+
+---
+
+● Now restart just the Langfuse container:                                                                          11% until auto-c      
+                                                                                                                                            
+  sudo docker compose up -d langfuse          
+                                          
+  Then open http://localhost:3000 and log in with:
+  - Email: admin@verdeai.local                                                                                                              
+  - Password: admin123

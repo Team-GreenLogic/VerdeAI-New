@@ -7,13 +7,35 @@ from loguru import logger
 
 from verdeai_shared.settings import settings
 
+
+def _update_langfuse_observation(name: str | None, messages: list[dict[str, Any]]) -> None:
+    """Update the current Langfuse observation with a name and input messages.
+
+    Passing ``input=messages`` is required for streaming calls because
+    ``langfuse.openai`` only auto-captures input for non-streaming completions.
+    """
+    try:
+        from langfuse.decorators import langfuse_context  # type: ignore[import-untyped]
+        kwargs: dict[str, Any] = {"input": messages}
+        if name:
+            kwargs["name"] = name
+        langfuse_context.update_current_observation(**kwargs)
+    except Exception:
+        pass
+
 _client: Any = None
 
 
 def _get_client() -> Any:
     global _client
     if _client is None:
-        from openai import AsyncOpenAI  # type: ignore[import-untyped]
+        try:
+            # langfuse.openai is a transparent drop-in that auto-captures every
+            # completion (model, messages, response, tokens, latency) and links
+            # them to the parent @observe trace via contextvars.
+            from langfuse.openai import AsyncOpenAI  # type: ignore[import-untyped]
+        except ImportError:
+            from openai import AsyncOpenAI  # type: ignore[import-untyped]
         _client = AsyncOpenAI(
             api_key=settings.OPENROUTER_API_KEY,
             base_url="https://openrouter.ai/api/v1",
@@ -34,8 +56,10 @@ async def complete(
     response_format: dict[str, Any] | None = None,
     provider: dict[str, Any] | None = None,
     extra: dict[str, Any] | None = None,
+    name: str | None = None,
 ) -> Any:
     """Send a chat completion request and return the full response."""
+    _update_langfuse_observation(name, messages)
     client = _get_client()
     kwargs: dict[str, Any] = {
         "model": model,
@@ -63,8 +87,10 @@ async def stream(
     temperature: float = 0.0,
     max_tokens: int = 2048,
     provider: dict[str, Any] | None = None,
+    name: str | None = None,
 ) -> AsyncGenerator[Any, None]:
     """Stream a chat completion. Yields ChatCompletionChunk objects with .choices."""
+    _update_langfuse_observation(name, messages)
     client = _get_client()
     extra_body: dict[str, Any] = {}
     if provider is not None:
@@ -89,6 +115,7 @@ async def stream_with_reasoning(
     max_tokens: int = 2048,
     response_format: dict[str, Any] | None = None,
     on_thinking: Callable[[str], Awaitable[None]] | None = None,
+    name: str | None = None,
 ) -> str:
     """Stream a completion, calling on_thinking for each reasoning_content chunk.
 
@@ -96,6 +123,7 @@ async def stream_with_reasoning(
     Compatible with response_format json_object — accumulates tokens and returns
     the concatenated string for the caller to JSON-parse.
     """
+    _update_langfuse_observation(name, messages)
     client = _get_client()
     kwargs: dict[str, Any] = {
         "model": model,

@@ -4,7 +4,11 @@ up:
 	docker compose up -d --build
 
 down:
-	docker compose down
+	docker compose stop
+
+# Rebuild only app services — leaves MongoDB/RabbitMQ/Redis/Keycloak running
+rebuild:
+	docker compose up -d --build api-gateway document-processor gap-analyzer recommendation missing-requirements chat-rag iso-knowledge langfuse
 
 logs:
 	docker compose logs -f $(s)

@@ -32,6 +32,14 @@ from verdeai_shared.settings import settings
 
 from app.progress import emit
 
+try:
+    from langfuse.decorators import langfuse_context, observe  # type: ignore[import-untyped]
+    _LANGFUSE = True
+except ImportError:
+    _LANGFUSE = False
+    def observe(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[misc]
+        return lambda fn: fn
+
 _PROMPTS_DIR = Path(_vs_pkg.__file__).parent / "llm" / "prompts"
 _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=False)
 
@@ -197,6 +205,7 @@ async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dic
             temperature=0.0,
             response_format={"type": "json_object"},
             on_thinking=on_thinking,
+            name="state_compare",
         )
         state_diff = json.loads(answer)
     except Exception as exc:
@@ -240,6 +249,7 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
             temperature=0.0,
             response_format={"type": "json_object"},
             on_thinking=on_thinking,
+            name="gap_analyse",
         )
         gap_result = json.loads(answer)
     except AnalysisPaused:
@@ -332,6 +342,7 @@ _clause_graph = _build_clause_graph()
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
+@observe(name="analyse_clause")  # type: ignore[misc]
 async def analyse_clause(
     db: Any,
     tenant_id: str,
@@ -341,6 +352,19 @@ async def analyse_clause(
     redis_client: Any = None,
 ) -> dict[str, Any]:
     """Invoke the LangGraph clause pipeline. Returns the gap result dict."""
+    clause_id = clause.get("clause_id", "")
+    if _LANGFUSE:
+        try:
+            langfuse_context.update_current_trace(  # type: ignore[union-attr]
+                name=f"analyse_clause:{clause_id}",
+                session_id=tenant_id,
+                user_id=tenant_id,
+                tags=["gap-analysis", clause_id],
+                metadata={"analysis_id": analysis_id, "clause_id": clause_id},
+            )
+        except Exception:
+            pass
+
     config: RunnableConfig = {
         "configurable": {
             "db": db,

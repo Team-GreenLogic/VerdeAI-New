@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from verdeai_shared.logging import configure_logging
+from verdeai_shared.observability.langfuse import init_langfuse
 from verdeai_shared.observability.tracing import configure_tracing
 from verdeai_shared.llm.openrouter_client import aclose as llm_aclose
 from verdeai_shared.db.mongo import close_client
@@ -17,6 +18,7 @@ from app.routers.chat import router as chat_router
 
 configure_logging(settings.SERVICE_NAME)
 configure_tracing(settings.SERVICE_NAME)
+init_langfuse()
 
 
 @asynccontextmanager
