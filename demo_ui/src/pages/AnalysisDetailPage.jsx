@@ -37,39 +37,12 @@ const XCircle = () => (
   </svg>
 )
 
-// ── Sub-step indicator (within a clause) ────────────────────────────────────
-function SubStepIndicator({ stage }) {
-  if (!stage) return null
-  const { step_index, step_total, detail } = stage
-  const pct = Math.min((step_index / step_total) * 100, 100)
-  return (
-    <div className="mt-2 px-1 space-y-1">
-      <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
-        <span className="truncate">{detail}</span>
-        <span className="flex-shrink-0 ml-2">{step_index}/{step_total}</span>
-      </div>
-      <div className="h-1 rounded-full bg-gray-800 overflow-hidden">
-        <div
-          className="h-1 rounded-full bg-blue-500 transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  )
-}
-
 // ── Live Progress Panel ──────────────────────────────────────────────────────
 function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
-  const [thinkingText, setThinkingText] = useState('')
-  const terminalRef = useRef()
   const clauseLogRef = useRef()
   const [fetchedCompleted, setFetchedCompleted] = useState(0)
 
-  const { messages, status, isConnected } = useJobProgress(analysisId, {
-    onThinkingToken: useCallback((m) => {
-      setThinkingText(prev => prev + m.detail)
-    }, []),
-  })
+  const { messages, status, isConnected } = useJobProgress(analysisId, {})
 
   useEffect(() => {
     getResults(analysisId)
@@ -77,8 +50,8 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       .catch(() => {})
   }, [analysisId])
 
-  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, currentStage, clauseLog } = useMemo(() => {
-    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null, currentStage = null
+  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, currentStage, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, currentStage = null
     const clauseMap = new Map()
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
@@ -86,25 +59,20 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       if (m.gap_count != null) gapCount = m.gap_count
       if (m.stage === 'thinking') {
         thinkingClause = m.clause_id || null
-        thinkingDetail = m.detail || null
         currentStage = null  // reset sub-step when a new clause starts
       } else if (m.stage === 'clause_stage') {
         currentStage = m  // { step, step_index, step_total, detail, clause_id }
       } else if (m.stage === 'clause') {
         thinkingClause = null
-        thinkingDetail = null
         currentStage = null  // clear sub-step when clause completes
         if (m.clause_id) clauseMap.set(m.clause_id, { clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, thinkingDetail, currentStage, clauseLog: Array.from(clauseMap.values()).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id)) }
+    return { completed, total, gapCount, thinkingClause, currentStage, clauseLog: Array.from(clauseMap.values()).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id)) }
   }, [messages])
 
   useEffect(() => {
     const last = messages[messages.length - 1]
-    if (last?.stage === 'thinking' || last?.stage === 'clause') {
-      setThinkingText('')
-    }
     if (last?.stage === 'clause') {
       onClauseComplete?.()
     }
@@ -121,11 +89,6 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
   const gapCount = wsGapCount > 0 ? wsGapCount : initialGapCount
   const activeClause = thinkingClause || (messages.length === 0 ? currentClauseId : null)
   const pct = Math.min((completed / total) * 100, 100)
-
-  useEffect(() => {
-    if (terminalRef.current)
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight
-  }, [thinkingText])
 
   useEffect(() => {
     if (clauseLogRef.current)
@@ -172,28 +135,31 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
         <p className="text-xs text-slate-400 mt-1">{pct.toFixed(0)}% complete</p>
       </div>
 
-      {/* Thinking terminal */}
-      {(activeClause || thinkingText) && (
-        <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 opacity-70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 opacity-70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" />
-            <span className="text-xs text-gray-400 ml-2 font-mono">
-              Compliance reasoning — clause {activeClause || '…'}
-            </span>
-          </div>
-          <SubStepIndicator stage={currentStage} />
-          <div
-            ref={terminalRef}
-            className="px-4 py-3 font-mono text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto scrollbar-thin"
-          >
-            {thinkingText || (
-              <span className="text-gray-500 italic">
-                {thinkingDetail || 'Preparing analysis…'}
-              </span>
+      {/* Currently analysing indicator */}
+      {activeClause && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 flex items-start gap-3">
+          <span className="mt-0.5 w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-blue-800">
+              Analysing clause <span className="font-mono">{activeClause}</span>
+            </p>
+            {currentStage && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-blue-600 truncate">{currentStage.detail}</p>
+                <div className="h-1 rounded-full bg-blue-100 overflow-hidden">
+                  <div
+                    className="h-1 rounded-full bg-blue-400 transition-all duration-300"
+                    style={{ width: `${Math.min((currentStage.step_index / currentStage.step_total) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
             )}
           </div>
+          {currentStage && (
+            <span className="text-xs text-blue-500 font-medium flex-shrink-0">
+              {currentStage.step_index}/{currentStage.step_total}
+            </span>
+          )}
         </div>
       )}
 
