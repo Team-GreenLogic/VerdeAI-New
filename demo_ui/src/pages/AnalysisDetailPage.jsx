@@ -62,7 +62,7 @@ function SubStepIndicator({ stage }) {
 function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
   const [thinkingText, setThinkingText] = useState('')
   const terminalRef = useRef()
-  const bottomRef = useRef()
+  const clauseLogRef = useRef()
   const [fetchedCompleted, setFetchedCompleted] = useState(0)
 
   const { messages, status, isConnected } = useJobProgress(analysisId, {
@@ -128,7 +128,8 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
   }, [thinkingText])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (clauseLogRef.current)
+      clauseLogRef.current.scrollTop = clauseLogRef.current.scrollHeight
   }, [clauseLog.length])
 
   const decisionBorder = (d) => {
@@ -197,7 +198,7 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       )}
 
       {/* Clause decision log */}
-      <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
+      <div ref={clauseLogRef} className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
         {clauseLog.length === 0 && !activeClause && (
           <p className="text-xs text-slate-400 pl-1">Waiting for first clause result…</p>
         )}
@@ -216,7 +217,6 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
             <span>{entry.decision}</span>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
     </div>
   )
