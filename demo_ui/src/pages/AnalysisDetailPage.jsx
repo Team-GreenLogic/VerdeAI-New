@@ -8,8 +8,8 @@ import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 
-const ACTIVE = ['pending', 'running']
-const DONE   = ['complete', 'failed', 'paused']
+const ACTIVE = ['pending', 'running', 'paused']
+const DONE   = ['complete', 'failed']
 
 const ChevronUp = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -26,6 +26,27 @@ const XCircle = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 )
+
+// ── Sub-step indicator (within a clause) ────────────────────────────────────
+function SubStepIndicator({ stage }) {
+  if (!stage) return null
+  const { step_index, step_total, detail } = stage
+  const pct = Math.min((step_index / step_total) * 100, 100)
+  return (
+    <div className="mt-2 px-1 space-y-1">
+      <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
+        <span className="truncate">{detail}</span>
+        <span className="flex-shrink-0 ml-2">{step_index}/{step_total}</span>
+      </div>
+      <div className="h-1 rounded-full bg-gray-800 overflow-hidden">
+        <div
+          className="h-1 rounded-full bg-blue-500 transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
 function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
@@ -46,8 +67,8 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       .catch(() => {})
   }, [analysisId])
 
-  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, clauseLog } = useMemo(() => {
-    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null
+  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, currentStage, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null, currentStage = null
     const clauseMap = new Map()
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
@@ -56,13 +77,17 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       if (m.stage === 'thinking') {
         thinkingClause = m.clause_id || null
         thinkingDetail = m.detail || null
+        currentStage = null  // reset sub-step when a new clause starts
+      } else if (m.stage === 'clause_stage') {
+        currentStage = m  // { step, step_index, step_total, detail, clause_id }
       } else if (m.stage === 'clause') {
         thinkingClause = null
         thinkingDetail = null
+        currentStage = null  // clear sub-step when clause completes
         if (m.clause_id) clauseMap.set(m.clause_id, { clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, thinkingDetail, clauseLog: Array.from(clauseMap.values()) }
+    return { completed, total, gapCount, thinkingClause, thinkingDetail, currentStage, clauseLog: Array.from(clauseMap.values()) }
   }, [messages])
 
   useEffect(() => {
@@ -147,6 +172,7 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
               Compliance reasoning — clause {activeClause || '…'}
             </span>
           </div>
+          <SubStepIndicator stage={currentStage} />
           <div
             ref={terminalRef}
             className="px-4 py-3 font-mono text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto scrollbar-thin"

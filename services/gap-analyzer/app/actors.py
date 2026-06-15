@@ -144,7 +144,8 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
 
             try:
                 result = await analyse_clause(db, tenant_id, analysis_id, clause,
-                                              on_thinking=on_thinking)
+                                              on_thinking=on_thinking,
+                                              redis_client=redis)
                 decision = result.get("decision", "Unknown")
                 if decision != "Met":
                     gap_count += 1

@@ -29,5 +29,9 @@ mongodb://localhost:27017/?directConnection=true
 
 ---
 
+docker compose build gap-analyzer && docker compose up -d gap-analyzer
+
+---
+
 user3@example.com
 abc12345

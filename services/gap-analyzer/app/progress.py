@@ -22,6 +22,9 @@ async def emit(
     clause_id: str | None = None,
     decision: str | None = None,
     gap_count: int | None = None,
+    step: str | None = None,
+    step_index: int | None = None,
+    step_total: int | None = None,
     redis_client: aioredis.Redis | None = None,  # type: ignore[type-arg]
 ) -> None:
     """Publish a progress event to the glass-box channel for this job.
@@ -44,6 +47,12 @@ async def emit(
         payload["decision"] = decision
     if gap_count is not None:
         payload["gap_count"] = gap_count
+    if step is not None:
+        payload["step"] = step
+    if step_index is not None:
+        payload["step_index"] = step_index
+    if step_total is not None:
+        payload["step_total"] = step_total
 
     channel = f"glassbox.{tenant_id}.{job_id}"
     hist_key = f"glassbox_hist.{tenant_id}.{job_id}"
