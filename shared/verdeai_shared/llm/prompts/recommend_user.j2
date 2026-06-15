@@ -1,0 +1,23 @@
+Clause {{ clause_id }}: {{ clause_title }}
+Gap analysis decision: {{ decision }}
+
+Failing assertions / missing evidence:
+{{ failing_assertions_json }}
+
+Organisation profile context:
+{{ reference_context_json }}
+
+Actionable seeds (pre-researched templates to draw from):
+{{ actionable_seeds_json }}
+
+Required output schema:
+[
+  {
+    "text": "<specific, actionable recommendation that names the gap it addresses>",
+    "cost": <1-5>,
+    "effort_weeks": <integer>,
+    "impact": <1-5>
+  }
+]
+
+Produce the JSON array now.

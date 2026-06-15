@@ -12,6 +12,7 @@ from verdeai_shared.db.mongo import close_client, get_database
 from verdeai_shared.llm.openrouter_client import aclose as llm_aclose
 from verdeai_shared.logging import configure_logging
 from verdeai_shared.messaging.connection import close_connection
+from verdeai_shared.observability.langfuse import init_langfuse
 from verdeai_shared.observability.tracing import configure_tracing
 
 from app.config import settings
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown."""
     configure_logging(settings.SERVICE_NAME)
     configure_tracing(settings.SERVICE_NAME)
+    init_langfuse()
     logger.info("API Gateway starting up")
 
     # Ensure MongoDB indexes exist

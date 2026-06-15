@@ -101,12 +101,12 @@ async def ws_jobs(
         # finished.  Checking every event would break pause/resume — a historical
         # "paused" event in the middle of the list would prevent live streaming
         # of later events after resume.
-        terminal_in_history = last_status in ("done", "failed", "deduped", "paused")
+        terminal_in_history = last_status in ("done", "failed", "deduped")
 
         # If the last structural event was a 'thinking' event the analysis is
         # mid-clause — replay the bounded thinking-token buffer so the client
         # sees partial reasoning from the current clause.
-        if not disconnected and not terminal_in_history and last_hist_stage == "thinking":
+        if not disconnected and not terminal_in_history and last_hist_stage in ("thinking", "clause_stage"):
             r_tok = _redis()
             try:
                 tokens_key = f"glassbox_tokens.{tenant_id}.{job_id}"
@@ -136,7 +136,7 @@ async def ws_jobs(
                 # Check for terminal event
                 try:
                     payload = json.loads(data_str)
-                    if payload.get("status") in ("done", "failed", "deduped", "paused"):
+                    if payload.get("status") in ("done", "failed", "deduped"):
                         break
                 except (json.JSONDecodeError, AttributeError):
                     pass

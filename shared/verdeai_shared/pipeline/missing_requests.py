@@ -15,6 +15,12 @@ from verdeai_shared.db.repositories.missing_request_store import MissingRequestS
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
 
+try:
+    from langfuse.decorators import observe  # type: ignore[import-untyped]
+except ImportError:
+    def observe(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[misc]
+        return lambda fn: fn
+
 _PROMPTS_DIR = Path(_vs_pkg.__file__).parent / "llm" / "prompts"
 _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=False)
 
@@ -22,6 +28,7 @@ _MAX_FIELDS_PER_CLAUSE = 5
 _DEFAULT_RESPONSIBLE_ROLE = "Environmental Management Representative"
 
 
+@observe(name="draft_request")  # type: ignore[misc]
 async def generate_missing_requests(
     db: Any,
     tenant_id: str,
@@ -55,13 +62,14 @@ async def generate_missing_requests(
         return
 
     items: list[dict[str, Any]] = []
-    tmpl = _jinja.get_template("draft_request.j2")
+    system_prompt = _jinja.get_template("draft_request_system.j2").render()
+    user_tmpl = _jinja.get_template("draft_request_user.j2")
 
     for field in fields:
         field_path = field.get("field_path", "")
         field_description = field.get("label", field_path)
 
-        prompt = tmpl.render(
+        user_prompt = user_tmpl.render(
             clause_id=clause_id,
             clause_title=clause_title,
             field_path=field_path,
@@ -72,9 +80,13 @@ async def generate_missing_requests(
         try:
             resp = await complete(
                 model=settings.CHEAP_REASONING_MODEL,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_prompt},
+                ],
                 max_tokens=256,
                 temperature=0.3,
+                name="draft_request",
             )
             request_text = resp.choices[0].message.content.strip()
         except Exception as exc:

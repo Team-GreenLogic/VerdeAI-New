@@ -8,8 +8,18 @@ import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 
-const ACTIVE = ['pending', 'running']
-const DONE   = ['complete', 'failed', 'paused']
+const ACTIVE = ['pending', 'running', 'paused']
+const DONE   = ['complete', 'failed']
+
+function compareClauseIds(a, b) {
+  const pa = String(a).split('.').map(Number)
+  const pb = String(b).split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
 
 const ChevronUp = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -27,11 +37,32 @@ const XCircle = () => (
   </svg>
 )
 
+// ── Sub-step indicator (within a clause) ────────────────────────────────────
+function SubStepIndicator({ stage }) {
+  if (!stage) return null
+  const { step_index, step_total, detail } = stage
+  const pct = Math.min((step_index / step_total) * 100, 100)
+  return (
+    <div className="mt-2 px-1 space-y-1">
+      <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
+        <span className="truncate">{detail}</span>
+        <span className="flex-shrink-0 ml-2">{step_index}/{step_total}</span>
+      </div>
+      <div className="h-1 rounded-full bg-gray-800 overflow-hidden">
+        <div
+          className="h-1 rounded-full bg-blue-500 transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 // ── Live Progress Panel ──────────────────────────────────────────────────────
 function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
   const [thinkingText, setThinkingText] = useState('')
   const terminalRef = useRef()
-  const bottomRef = useRef()
+  const clauseLogRef = useRef()
   const [fetchedCompleted, setFetchedCompleted] = useState(0)
 
   const { messages, status, isConnected } = useJobProgress(analysisId, {
@@ -46,8 +77,8 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       .catch(() => {})
   }, [analysisId])
 
-  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, clauseLog } = useMemo(() => {
-    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null
+  const { completed: wsCompleted, total, gapCount: wsGapCount, thinkingClause, thinkingDetail, currentStage, clauseLog } = useMemo(() => {
+    let completed = 0, total = 32, gapCount = 0, thinkingClause = null, thinkingDetail = null, currentStage = null
     const clauseMap = new Map()
     for (const m of messages) {
       if (m.completed != null) completed = m.completed
@@ -56,13 +87,17 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       if (m.stage === 'thinking') {
         thinkingClause = m.clause_id || null
         thinkingDetail = m.detail || null
+        currentStage = null  // reset sub-step when a new clause starts
+      } else if (m.stage === 'clause_stage') {
+        currentStage = m  // { step, step_index, step_total, detail, clause_id }
       } else if (m.stage === 'clause') {
         thinkingClause = null
         thinkingDetail = null
+        currentStage = null  // clear sub-step when clause completes
         if (m.clause_id) clauseMap.set(m.clause_id, { clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, thinkingDetail, clauseLog: Array.from(clauseMap.values()) }
+    return { completed, total, gapCount, thinkingClause, thinkingDetail, currentStage, clauseLog: Array.from(clauseMap.values()).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id)) }
   }, [messages])
 
   useEffect(() => {
@@ -93,7 +128,8 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
   }, [thinkingText])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (clauseLogRef.current)
+      clauseLogRef.current.scrollTop = clauseLogRef.current.scrollHeight
   }, [clauseLog.length])
 
   const decisionBorder = (d) => {
@@ -147,6 +183,7 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
               Compliance reasoning — clause {activeClause || '…'}
             </span>
           </div>
+          <SubStepIndicator stage={currentStage} />
           <div
             ref={terminalRef}
             className="px-4 py-3 font-mono text-[11px] text-emerald-300 leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto scrollbar-thin"
@@ -161,7 +198,7 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
       )}
 
       {/* Clause decision log */}
-      <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
+      <div ref={clauseLogRef} className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
         {clauseLog.length === 0 && !activeClause && (
           <p className="text-xs text-slate-400 pl-1">Waiting for first clause result…</p>
         )}
@@ -180,7 +217,6 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
             <span>{entry.decision}</span>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
     </div>
   )
@@ -193,7 +229,7 @@ function GapResultsTab({ analysisId, version }) {
   const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
-    getResults(analysisId).then(r => { setResults(r || []); setLoading(false) })
+    getResults(analysisId).then(r => { setResults((r || []).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id))); setLoading(false) })
   }, [analysisId, version])
 
   if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
@@ -308,7 +344,7 @@ function RecommendationsTab({ analysisId, version }) {
 
   return (
     <div className="space-y-5">
-      {Object.entries(byClause).map(([clauseId, items]) => (
+      {Object.entries(byClause).sort(([a], [b]) => compareClauseIds(a, b)).map(([clauseId, items]) => (
         <div key={clauseId}>
           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
             Clause {clauseId}
@@ -356,7 +392,7 @@ function MissingRequirementsTab({ analysisId, version }) {
 
   return (
     <div className="space-y-5">
-      {Object.entries(byClause).map(([clauseId, reqs]) => (
+      {Object.entries(byClause).sort(([a], [b]) => compareClauseIds(a, b)).map(([clauseId, reqs]) => (
         <div key={clauseId}>
           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Clause {clauseId}</h4>
           <div className="space-y-3">
@@ -397,7 +433,7 @@ export default function AnalysisDetailPage() {
 
   async function refresh() {
     const a = await getAnalysis(id).catch(() => null)
-    setAnalysis(a)
+    if (a) setAnalysis(a)
   }
 
   const handleClauseComplete = useCallback(() => {
@@ -423,13 +459,21 @@ export default function AnalysisDetailPage() {
 
   async function handlePause() {
     setActioning(true)
-    try { await pauseAnalysis(id); await refresh() } catch (err) { alert(err.message) }
+    try {
+      await pauseAnalysis(id)
+      setAnalysis(prev => prev ? { ...prev, status: 'paused' } : prev)
+      await refresh()
+    } catch (err) { alert(err.message) }
     setActioning(false)
   }
 
   async function handleResume() {
     setActioning(true)
-    try { await resumeAnalysis(id); await refresh() } catch (err) { alert(err.message) }
+    try {
+      await resumeAnalysis(id)
+      setAnalysis(prev => prev ? { ...prev, status: 'running' } : prev)
+      await refresh()
+    } catch (err) { alert(err.message) }
     setActioning(false)
   }
 
@@ -463,7 +507,7 @@ export default function AnalysisDetailPage() {
                 {analysis.gap_count} gap{analysis.gap_count !== 1 ? 's' : ''}
               </span>
             )}
-            {isActive && (
+            {isActive && analysis.status !== 'paused' && (
               <button
                 onClick={handlePause}
                 disabled={actioning}
@@ -490,7 +534,15 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Live progress */}
-      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} onClauseComplete={handleClauseComplete} onAnalysisDone={handleAnalysisDone} />}
+      {(analysis.status === 'running' || analysis.status === 'pending') && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} onClauseComplete={handleClauseComplete} onAnalysisDone={handleAnalysisDone} />}
+      {analysis.status === 'paused' && (
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-5 flex items-center gap-3 text-sm text-slate-500">
+          <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+          </svg>
+          Analysis is paused. Click <span className="font-semibold text-brand-600">Resume</span> to continue.
+        </div>
+      )}
 
       {/* Pill tabs */}
       <div className="overflow-x-auto">

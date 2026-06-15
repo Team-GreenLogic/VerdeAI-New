@@ -112,5 +112,6 @@ async def _summarise_image(tmpl: Any, url: str) -> str:
         ],
         max_tokens=200,
         temperature=0.0,
+        name="image_summary",
     )
     return response.choices[0].message.content.strip()

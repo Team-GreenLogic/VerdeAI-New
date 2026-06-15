@@ -7,6 +7,7 @@ from loguru import logger
 from verdeai_shared.logging import configure_logging
 from verdeai_shared.messaging.consumer import AsyncConsumer
 from verdeai_shared.messaging.connection import close_connection
+from verdeai_shared.observability.langfuse import init_langfuse
 from verdeai_shared.observability.tracing import configure_tracing
 
 from app.config import settings
@@ -14,6 +15,7 @@ from app.actors import handle_document_deleted, handle_document_uploaded
 
 configure_logging(settings.SERVICE_NAME)
 configure_tracing(settings.SERVICE_NAME)
+init_langfuse()
 
 _QUEUE = "documents.process"
 _INVALIDATE_QUEUE = "documents.invalidate"

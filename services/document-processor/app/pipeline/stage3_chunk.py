@@ -143,6 +143,7 @@ async def _generate_summary(text: str) -> str:
             ],
             max_tokens=120,
             temperature=0.0,
+            name="chunk_summary",
         )
         return resp.choices[0].message.content.strip()
     except Exception as exc:
@@ -159,6 +160,7 @@ async def _contextualise(tmpl: Any, summary: str, chunk_text: str) -> str:
             messages=[{"role": "user", "content": prompt}],
             max_tokens=80,
             temperature=0.0,
+            name="contextualise_chunk",
         )
         return resp.choices[0].message.content.strip()
     except Exception as exc:

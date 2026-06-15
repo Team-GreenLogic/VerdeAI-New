@@ -78,3 +78,5 @@ mongo-data/
 secrets/
 
 CLAUDE.md
+
+claude_session.txt

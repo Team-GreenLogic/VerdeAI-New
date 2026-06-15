@@ -17,6 +17,14 @@ from verdeai_shared.retrieval.embedder import embed_query
 from verdeai_shared.retrieval.hybrid import hybrid_retrieve
 from verdeai_shared.settings import settings
 
+try:
+    from langfuse.decorators import langfuse_context, observe  # type: ignore[import-untyped]
+    _LANGFUSE = True
+except ImportError:
+    _LANGFUSE = False
+    def observe(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[misc]
+        return lambda fn: fn
+
 _PROMPTS_DIR = Path(_vs_pkg.__file__).parent / "llm" / "prompts"
 _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=False)
 
@@ -166,6 +174,7 @@ async def _load_analysis_context(db: Any, tenant_id: str) -> str:
     return "\n".join(lines)
 
 
+@observe(name="chat")  # type: ignore[misc]
 async def rag_stream(
     db: Any,
     tenant_id: str,
@@ -179,6 +188,16 @@ async def rag_stream(
         {"type": "citations", "citations": [...]}  — after full response
         {"type": "done"}  — final signal
     """
+    if _LANGFUSE:
+        try:
+            langfuse_context.update_current_trace(
+                session_id=tenant_id,
+                user_id=tenant_id,
+                tags=["chat"],
+            )
+        except Exception:
+            pass
+
     # 1. Embed question
     try:
         query_vector = await embed_query(question)
@@ -249,6 +268,7 @@ async def rag_stream(
             messages=messages,
             temperature=0.3,
             max_tokens=2048,
+            name="chat",
         ):
             # openai SDK stream yields ChatCompletionChunk objects
             delta = event.choices[0].delta if event.choices else None
