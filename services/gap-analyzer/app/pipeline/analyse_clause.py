@@ -121,11 +121,9 @@ async def _embed_node(state: ClauseState, config: RunnableConfig) -> dict[str, A
     clause = state["clause"]
     clause_id: str = clause["clause_id"]
     query_text = f"{clause.get('title', clause_id)}\n{clause.get('requirements', '')}"
-    try:
-        vector: list[float] = await embed_query(query_text)
-    except Exception as exc:
-        logger.warning("Embedding failed for clause", clause_id=clause_id, error=str(exc))
-        vector = []
+    # Let exceptions propagate — the actor catches them and records a proper Error
+    # decision rather than silently cascading Insufficient Evidence to all remaining clauses.
+    vector: list[float] = await embed_query(query_text)
     return {"query_vector": vector}
 
 
@@ -135,12 +133,9 @@ async def _retrieve_node(state: ClauseState, config: RunnableConfig) -> dict[str
     clause = state["clause"]
     clause_id: str = clause["clause_id"]
     query_text = f"{clause.get('title', clause_id)}\n{clause.get('requirements', '')}"
-    chunks: list[dict[str, Any]] = []
-    if state.get("query_vector"):
-        try:
-            chunks = await hybrid_retrieve(cfg["db"], cfg["tenant_id"], query_text, state["query_vector"])
-        except Exception as exc:
-            logger.warning("Hybrid retrieval failed", clause_id=clause_id, error=str(exc))
+    # Let exceptions propagate so the actor can distinguish a retrieval failure
+    # from a genuine "no documents in the knowledge base" result.
+    chunks = await hybrid_retrieve(cfg["db"], cfg["tenant_id"], query_text, state["query_vector"])
     evidence_text = _format_chunks(chunks) if chunks else ""
     return {"chunks": chunks, "evidence_text": evidence_text}
 
@@ -187,6 +182,7 @@ async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dic
         prompt = tmpl.render(
             clause_id=clause_id,
             clause_title=clause_title,
+            clause_requirements=clause.get("requirements", ""),
             org_profile_json=json.dumps(state.get("org_profile_map", {}), indent=2),
             state_template_json=json.dumps(state.get("state_template_list", []), indent=2),
             evidence_chunks=state.get("evidence_text", ""),
@@ -226,6 +222,7 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
         prompt = tmpl.render(
             clause_id=clause_id,
             clause_title=clause_title,
+            clause_requirements=clause.get("requirements", ""),
             state_diff_json=json.dumps(state_diff.get("state_diff", {}), indent=2),
             reference_context_json=json.dumps(state_diff.get("reference_context", {}), indent=2),
             evidence_chunks=state.get("evidence_text", ""),
