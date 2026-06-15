@@ -45,3 +45,7 @@ abc12345
   Then open http://localhost:3000 and log in with:
   - Email: admin@verdeai.local                                                                                                              
   - Password: admin123
+
+---
+
+bash migrate_models_to_langfuse.sh
