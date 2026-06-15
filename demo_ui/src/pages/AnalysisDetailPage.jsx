@@ -11,6 +11,16 @@ import Spinner from '../components/Spinner.jsx'
 const ACTIVE = ['pending', 'running', 'paused']
 const DONE   = ['complete', 'failed']
 
+function compareClauseIds(a, b) {
+  const pa = String(a).split('.').map(Number)
+  const pb = String(b).split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
 const ChevronUp = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
@@ -87,7 +97,7 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
         if (m.clause_id) clauseMap.set(m.clause_id, { clause_id: m.clause_id, decision: m.decision || '' })
       }
     }
-    return { completed, total, gapCount, thinkingClause, thinkingDetail, currentStage, clauseLog: Array.from(clauseMap.values()) }
+    return { completed, total, gapCount, thinkingClause, thinkingDetail, currentStage, clauseLog: Array.from(clauseMap.values()).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id)) }
   }, [messages])
 
   useEffect(() => {
@@ -219,7 +229,7 @@ function GapResultsTab({ analysisId, version }) {
   const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
-    getResults(analysisId).then(r => { setResults(r || []); setLoading(false) })
+    getResults(analysisId).then(r => { setResults((r || []).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id))); setLoading(false) })
   }, [analysisId, version])
 
   if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
@@ -334,7 +344,7 @@ function RecommendationsTab({ analysisId, version }) {
 
   return (
     <div className="space-y-5">
-      {Object.entries(byClause).map(([clauseId, items]) => (
+      {Object.entries(byClause).sort(([a], [b]) => compareClauseIds(a, b)).map(([clauseId, items]) => (
         <div key={clauseId}>
           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
             Clause {clauseId}
@@ -382,7 +392,7 @@ function MissingRequirementsTab({ analysisId, version }) {
 
   return (
     <div className="space-y-5">
-      {Object.entries(byClause).map(([clauseId, reqs]) => (
+      {Object.entries(byClause).sort(([a], [b]) => compareClauseIds(a, b)).map(([clauseId, reqs]) => (
         <div key={clauseId}>
           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Clause {clauseId}</h4>
           <div className="space-y-3">
@@ -423,7 +433,7 @@ export default function AnalysisDetailPage() {
 
   async function refresh() {
     const a = await getAnalysis(id).catch(() => null)
-    setAnalysis(a)
+    if (a) setAnalysis(a)
   }
 
   const handleClauseComplete = useCallback(() => {
@@ -449,13 +459,21 @@ export default function AnalysisDetailPage() {
 
   async function handlePause() {
     setActioning(true)
-    try { await pauseAnalysis(id); await refresh() } catch (err) { alert(err.message) }
+    try {
+      await pauseAnalysis(id)
+      setAnalysis(prev => prev ? { ...prev, status: 'paused' } : prev)
+      await refresh()
+    } catch (err) { alert(err.message) }
     setActioning(false)
   }
 
   async function handleResume() {
     setActioning(true)
-    try { await resumeAnalysis(id); await refresh() } catch (err) { alert(err.message) }
+    try {
+      await resumeAnalysis(id)
+      setAnalysis(prev => prev ? { ...prev, status: 'running' } : prev)
+      await refresh()
+    } catch (err) { alert(err.message) }
     setActioning(false)
   }
 
@@ -489,7 +507,7 @@ export default function AnalysisDetailPage() {
                 {analysis.gap_count} gap{analysis.gap_count !== 1 ? 's' : ''}
               </span>
             )}
-            {isActive && (
+            {isActive && analysis.status !== 'paused' && (
               <button
                 onClick={handlePause}
                 disabled={actioning}
@@ -516,7 +534,15 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Live progress */}
-      {isActive && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} onClauseComplete={handleClauseComplete} onAnalysisDone={handleAnalysisDone} />}
+      {(analysis.status === 'running' || analysis.status === 'pending') && <ProgressPanel analysisId={id} currentClauseId={analysis.current_clause_id} initialGapCount={analysis.gap_count ?? 0} onClauseComplete={handleClauseComplete} onAnalysisDone={handleAnalysisDone} />}
+      {analysis.status === 'paused' && (
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-5 flex items-center gap-3 text-sm text-slate-500">
+          <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+          </svg>
+          Analysis is paused. Click <span className="font-semibold text-brand-600">Resume</span> to continue.
+        </div>
+      )}
 
       {/* Pill tabs */}
       <div className="overflow-x-auto">
