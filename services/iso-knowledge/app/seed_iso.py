@@ -18,6 +18,7 @@ from loguru import logger
 from verdeai_shared.db.mongo import get_database
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
+from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
 from verdeai_shared.retrieval.embedder import embed_documents
 from verdeai_shared.settings import settings
 
@@ -516,6 +517,7 @@ async def ensure_iso_vector_index(db: Any) -> None:
                         },
                         {"type": "filter", "path": "clause_id"},
                         {"type": "filter", "path": "section"},
+                        {"type": "filter", "path": "version_id"},
                     ]
                 },
             }
@@ -525,65 +527,95 @@ async def ensure_iso_vector_index(db: Any) -> None:
         logger.warning("ISO vector index check/create skipped", error=str(exc))
 
 
-async def seed_clauses(db: Any) -> None:
-    """Upsert all 32 ISO clauses with embeddings."""
+async def seed_clauses(db: Any, version_id: str = DEFAULT_VERSION_ID) -> None:
+    """Upsert all 32 ISO clauses with embeddings for the given version."""
     repo = ISOClausesRepository(db)
     texts = [f"{c['title']}\n{c['requirements']}" for c in CLAUSES]
-    logger.info("Embedding ISO clauses", count=len(texts))
+    logger.info("Embedding ISO clauses", count=len(texts), version_id=version_id)
     embeddings = await embed_documents(texts)
 
     for clause, emb in zip(CLAUSES, embeddings):
-        doc = {**clause, "embedding": emb}
+        doc = {**clause, "version_id": version_id, "embedding": emb}
         await repo.upsert(doc)
-        logger.info("Upserted clause", clause_id=clause["clause_id"])
+        logger.info("Upserted clause", clause_id=clause["clause_id"], version_id=version_id)
 
 
-async def seed_state_template(db: Any) -> None:
+async def seed_state_template(db: Any, version_id: str = DEFAULT_VERSION_ID) -> None:
     """Upsert 3 state template fields for each clause (96 total)."""
     repo = ISOStateRepository(db)
     for clause in CLAUSES:
         cid = clause["clause_id"]
         for field in _STATE_FIELDS:
             await repo.upsert({
+                "version_id": version_id,
                 "clause_id": cid,
                 "field_path": f"{cid}.{field['suffix']}",
                 "label": field["label"],
                 "field_type": field["field_type"],
                 "default": field["default"],
             })
-    logger.info("State template seeded", clauses=len(CLAUSES), fields_per_clause=len(_STATE_FIELDS))
+    logger.info("State template seeded", clauses=len(CLAUSES), fields_per_clause=len(_STATE_FIELDS), version_id=version_id)
 
 
-async def seed_org_profile(db: Any, tenant_id: str) -> None:
+async def seed_org_profile(db: Any, tenant_id: str, version_id: str = DEFAULT_VERSION_ID) -> None:
     """Upsert blank org_profile entries for the demo tenant."""
     for clause in CLAUSES:
         cid = clause["clause_id"]
         for field in _STATE_FIELDS:
             field_path = f"{cid}.{field['suffix']}"
             await db.org_profile.update_one(
-                {"tenant_id": tenant_id, "field_path": field_path},
+                {"tenant_id": tenant_id, "version_id": version_id, "field_path": field_path},
                 {"$setOnInsert": {
                     "tenant_id": tenant_id,
+                    "version_id": version_id,
                     "field_path": field_path,
                     "value": field["default"],
                 }},
                 upsert=True,
             )
-    logger.info("Org profile seeded for demo tenant", tenant_id=tenant_id)
+    logger.info("Org profile seeded for demo tenant", tenant_id=tenant_id, version_id=version_id)
+
+
+async def _backfill_version_id(db: Any) -> None:
+    """Stamp existing documents that pre-date versioning with the default version_id."""
+    for collection in ("iso_clauses", "iso_state_template", "org_profile", "state_store"):
+        result = await db[collection].update_many(
+            {"version_id": {"$exists": False}},
+            {"$set": {"version_id": DEFAULT_VERSION_ID}},
+        )
+        if result.modified_count:
+            logger.info("Backfilled version_id", collection=collection, count=result.modified_count)
 
 
 async def run_seed(demo_tenant_id: str) -> None:
     """Main entry point — idempotent."""
     db = get_database()
 
-    existing = await db.iso_clauses.count_documents({})
+    # Backfill existing data that pre-dates versioning
+    await _backfill_version_id(db)
+
+    # Upsert the default version metadata
+    versions_repo = ISOVersionsRepository(db)
+    await versions_repo.upsert({
+        "version_id": DEFAULT_VERSION_ID,
+        "name": "ISO 14001:2015",
+        "description": "ISO 14001:2015 Environmental Management Systems — Requirements",
+        "status": "published",
+        "source": "seed",
+        "clause_count": len(CLAUSES),
+        "created_by": "system",
+    })
+    logger.info("Default ISO version upserted", version_id=DEFAULT_VERSION_ID)
+
+    existing = await db.iso_clauses.count_documents({"version_id": DEFAULT_VERSION_ID})
     if existing >= len(CLAUSES):
-        logger.info("ISO clauses already seeded — skipping", count=existing)
+        logger.info("ISO clauses already seeded — skipping clause embed", count=existing)
+        await ensure_iso_vector_index(db)
         return
 
     logger.info("Starting ISO knowledge seed", target_clauses=len(CLAUSES))
-    await seed_clauses(db)
-    await seed_state_template(db)
-    await seed_org_profile(db, demo_tenant_id)
+    await seed_clauses(db, DEFAULT_VERSION_ID)
+    await seed_state_template(db, DEFAULT_VERSION_ID)
+    await seed_org_profile(db, demo_tenant_id, DEFAULT_VERSION_ID)
     await ensure_iso_vector_index(db)
     logger.info("ISO knowledge seeding complete")

@@ -33,6 +33,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
     tenant_id = event.tenant_id
     analysis_id = event.analysis_id
     scope = event.scope
+    version_id = event.version_id
 
     db = get_database()
 
@@ -65,8 +66,8 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
         scope=scope,
     )
 
-    # Resolve clause list
-    all_clauses = await ISOClausesRepository(db).list_all()
+    # Resolve clause list for this version
+    all_clauses = await ISOClausesRepository(db).list_all(version_id=version_id)
     if scope == "full":
         clauses = all_clauses
     else:

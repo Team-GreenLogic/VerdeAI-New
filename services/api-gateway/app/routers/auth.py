@@ -6,14 +6,37 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, HTTPException, status
 from loguru import logger
+from pydantic import BaseModel
 
 from verdeai_shared.auth.keycloak_admin import assign_realm_role, create_user
+from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
 from verdeai_shared.settings import settings as shared_settings
+
+_DEFAULT_ROLE = "compliance-officer"
+_ADMIN_ROLE = "admin"
 
 from app.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, RegisterResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class MeResponse(BaseModel):
+    sub: str
+    email: str
+    tenant_id: str
+    roles: list[str]
+
+
+@router.get("/me", response_model=MeResponse)
+async def me(principal: CurrentPrincipal) -> MeResponse:
+    """Return the current user's identity and roles (including server-injected admin role)."""
+    return MeResponse(
+        sub=principal.sub,
+        email=principal.email,
+        tenant_id=principal.tenant_id,
+        roles=principal.roles,
+    )
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -50,12 +73,18 @@ async def register(body: RegisterRequest) -> RegisterResponse:
             detail="Failed to create user in identity provider",
         ) from exc
 
-    # Step 2: Assign role
-    try:
-        assign_realm_role(keycloak_sub, "compliance-officer")
-    except Exception as exc:
-        logger.error("Role assignment failed", keycloak_sub=keycloak_sub, error=str(exc))
-        # Non-fatal: user is created; role assignment failure logged only
+    # Step 2: Assign roles (admin if email is in ADMIN_EMAILS, else compliance-officer)
+    is_admin = body.email.lower() in shared_settings.admin_email_set()
+    roles_to_assign = [_DEFAULT_ROLE]
+    if is_admin:
+        roles_to_assign.append(_ADMIN_ROLE)
+
+    for role in roles_to_assign:
+        try:
+            assign_realm_role(keycloak_sub, role)
+        except Exception as exc:
+            logger.error("Role assignment failed", keycloak_sub=keycloak_sub, role=role, error=str(exc))
+            # Non-fatal: user is created; role assignment failure logged only
 
     # Step 3: Upsert Mongo users row
     db = get_database()
@@ -67,7 +96,7 @@ async def register(body: RegisterRequest) -> RegisterResponse:
                 "keycloak_sub": keycloak_sub,
                 "email": body.email,
                 "tenant_id": tenant_id,
-                "roles": ["compliance-officer"],
+                "roles": roles_to_assign,
                 "last_seen_at": now,
             },
             "$setOnInsert": {"created_at": now},

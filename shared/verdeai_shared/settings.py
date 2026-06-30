@@ -73,12 +73,20 @@ class Settings(BaseSettings):
     # --- Service URLs ---
     CHAT_RAG_URL: str = "http://chat-rag:8001"
 
+    # --- Admin ---
+    ADMIN_EMAILS: str = ""  # comma-separated emails that auto-receive the admin role
+
     # --- Tuning ---
     EMBED_BATCH_SIZE: int = 128
+    EMBED_BATCH_DELAY: float = 0.0  # seconds between batches; set >0 on free-tier Voyage (3 RPM)
     RETRIEVAL_TOP_K: int = 30
     RERANK_TOP_K: int = 8
     CHUNK_TARGET_TOKENS: int = 512
     CHUNK_OVERLAP_TOKENS: int = 64
+
+    def admin_email_set(self) -> set[str]:
+        """Return the set of lowercase admin emails from the env var."""
+        return {e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()}
 
 
 settings = Settings()

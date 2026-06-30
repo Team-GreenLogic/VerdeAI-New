@@ -7,7 +7,7 @@ from jwt.algorithms import RSAAlgorithm
 
 from verdeai_shared.auth.jwks import get_public_key
 from verdeai_shared.auth.principal import Principal
-from verdeai_shared.settings import settings
+from verdeai_shared.settings import settings  # noqa: F401 — used for admin_email_set()
 
 
 class AuthError(Exception):
@@ -87,11 +87,16 @@ async def decode_token(token: str) -> Principal:
 
     # Step 5: Build Principal
     realm_access: dict[str, Any] = payload.get("realm_access", {})
-    roles: list[str] = realm_access.get("roles", [])
+    roles: list[str] = list(realm_access.get("roles", []))
+
+    # Belt-and-suspenders: grant admin if email is in ADMIN_EMAILS env list
+    email: str = payload.get("email", "")
+    if email.lower() in settings.admin_email_set() and "admin" not in roles:
+        roles.append("admin")
 
     return Principal(
         sub=payload["sub"],
         tenant_id=tenant_id,
-        email=payload.get("email", ""),
+        email=email,
         roles=roles,
     )

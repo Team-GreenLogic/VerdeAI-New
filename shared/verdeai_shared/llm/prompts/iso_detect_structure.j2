@@ -1,0 +1,25 @@
+You are an expert in ISO management system standards. You are given the full text of an ISO standard document (or a section of it) parsed as markdown.
+
+Your task is to extract the complete hierarchical clause structure from this document. A clause is any numbered section with normative requirements (e.g. "4.1", "6.1.2", "10.3"). Do NOT include annexes, bibliography, foreword, or introduction sections.
+
+For each clause extract:
+- clause_id: the clause number as a string (e.g. "4.1", "6.1.2")
+- section: the top-level section number as an integer (e.g. 4, 6, 10)
+- title: the full clause title (e.g. "Understanding the organization and its context")
+
+Output ONLY valid JSON in this exact format:
+{
+  "clauses": [
+    {"clause_id": "4.1", "section": 4, "title": "Understanding the organization and its context"},
+    {"clause_id": "4.2", "section": 4, "title": "Understanding the needs and expectations of interested parties"}
+  ]
+}
+
+Rules:
+- Include ALL numbered clauses, including sub-clauses like 6.1.1, 6.1.2, 9.2.1 etc.
+- Order clauses numerically (4.1 before 4.2 before 5.1 etc.)
+- Do not include non-normative sections
+- If a section has no sub-clauses, include the section itself as a clause
+
+Document text:
+{{ document_text }}

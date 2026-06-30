@@ -5,10 +5,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from fastapi import Query
+
 from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
+from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 from verdeai_shared.db.repositories.org_profile import OrgProfileRepository
 
 router = APIRouter(prefix="/org-profile", tags=["org-profile"])
@@ -80,10 +83,13 @@ def _pct(filled: int, total: int) -> float:
 # --- Endpoints ---
 
 @router.get("", response_model=OrgProfile)
-async def get_org_profile(principal: CurrentPrincipal) -> OrgProfile:
+async def get_org_profile(
+    principal: CurrentPrincipal,
+    version_id: str = Query(default=DEFAULT_VERSION_ID),
+) -> OrgProfile:
     """Return the tenant's top-level organisation profile."""
     db = get_database()
-    repo = OrgProfileRepository(db, principal.tenant_id)
+    repo = OrgProfileRepository(db, principal.tenant_id, version_id=version_id)
     all_fields = await repo.list_all()
     value_map = {doc["field_path"]: doc.get("value") for doc in all_fields}
     return OrgProfile(**{
@@ -96,10 +102,11 @@ async def get_org_profile(principal: CurrentPrincipal) -> OrgProfile:
 async def update_org_profile(
     body: OrgProfileUpdate,
     principal: CurrentPrincipal,
+    version_id: str = Query(default=DEFAULT_VERSION_ID),
 ) -> OrgProfile:
     """Update top-level organisation profile fields (only provided fields are changed)."""
     db = get_database()
-    repo = OrgProfileRepository(db, principal.tenant_id)
+    repo = OrgProfileRepository(db, principal.tenant_id, version_id=version_id)
 
     updates = {
         _ORG_FIELDS[key]: value
@@ -119,14 +126,17 @@ async def update_org_profile(
 
 
 @router.get("/completeness", response_model=CompletenessReport)
-async def get_completeness(principal: CurrentPrincipal) -> CompletenessReport:
+async def get_completeness(
+    principal: CurrentPrincipal,
+    version_id: str = Query(default=DEFAULT_VERSION_ID),
+) -> CompletenessReport:
     """Return overall and per-clause profile completeness percentages."""
     db = get_database()
     tenant_id = principal.tenant_id
 
-    clauses = await ISOClausesRepository(db).list_all()
-    state_entries = await ISOStateRepository(db).list_all()
-    org_entries = await OrgProfileRepository(db, tenant_id).list_all()
+    clauses = await ISOClausesRepository(db).list_all(version_id=version_id)
+    state_entries = await ISOStateRepository(db).list_all(version_id=version_id)
+    org_entries = await OrgProfileRepository(db, tenant_id, version_id=version_id).list_all()
 
     filled_paths = {doc["field_path"] for doc in org_entries if doc.get("value") not in (None, "", [])}
 
@@ -163,9 +173,12 @@ async def get_completeness(principal: CurrentPrincipal) -> CompletenessReport:
 
 
 @router.get("/clauses", response_model=list[ClauseSummary])
-async def list_clause_summaries(principal: CurrentPrincipal) -> list[ClauseSummary]:
-    """List all 32 ISO clauses with their profile completeness."""
-    report = await get_completeness(principal)
+async def list_clause_summaries(
+    principal: CurrentPrincipal,
+    version_id: str = Query(default=DEFAULT_VERSION_ID),
+) -> list[ClauseSummary]:
+    """List all ISO clauses with their profile completeness."""
+    report = await get_completeness(principal, version_id=version_id)
     return report.clauses
 
 
@@ -173,17 +186,18 @@ async def list_clause_summaries(principal: CurrentPrincipal) -> list[ClauseSumma
 async def get_clause_profile(
     clause_id: str,
     principal: CurrentPrincipal,
+    version_id: str = Query(default=DEFAULT_VERSION_ID),
 ) -> ClauseProfile:
     """Get all state fields for a clause, with current tenant values."""
     db = get_database()
     tenant_id = principal.tenant_id
 
-    clause = await ISOClausesRepository(db).get(clause_id)
+    clause = await ISOClausesRepository(db).get(clause_id, version_id=version_id)
     if not clause:
         raise HTTPException(status_code=404, detail=f"Clause '{clause_id}' not found")
 
-    state_entries = await ISOStateRepository(db).list_for_clause(clause_id)
-    org_entries = await OrgProfileRepository(db, tenant_id).list_for_clause(clause_id)
+    state_entries = await ISOStateRepository(db).list_for_clause(clause_id, version_id=version_id)
+    org_entries = await OrgProfileRepository(db, tenant_id, version_id=version_id).list_for_clause(clause_id)
     value_map = {doc["field_path"]: doc.get("value") for doc in org_entries}
 
     fields = [
@@ -209,17 +223,18 @@ async def update_clause_profile(
     clause_id: str,
     body: dict[str, Any],
     principal: CurrentPrincipal,
+    version_id: str = Query(default=DEFAULT_VERSION_ID),
 ) -> ClauseProfile:
     """Update per-clause state field values. Body is a flat field_path → value map."""
     db = get_database()
     tenant_id = principal.tenant_id
 
-    clause = await ISOClausesRepository(db).get(clause_id)
+    clause = await ISOClausesRepository(db).get(clause_id, version_id=version_id)
     if not clause:
         raise HTTPException(status_code=404, detail=f"Clause '{clause_id}' not found")
 
     # Validate that submitted field_paths belong to this clause
-    state_entries = await ISOStateRepository(db).list_for_clause(clause_id)
+    state_entries = await ISOStateRepository(db).list_for_clause(clause_id, version_id=version_id)
     valid_paths = {e["field_path"] for e in state_entries}
 
     to_upsert = {fp: val for fp, val in body.items() if fp in valid_paths}
@@ -231,7 +246,7 @@ async def update_clause_profile(
         )
 
     if to_upsert:
-        await OrgProfileRepository(db, tenant_id).upsert_many(to_upsert)
+        await OrgProfileRepository(db, tenant_id, version_id=version_id).upsert_many(to_upsert)
 
     # Return updated clause profile
-    return await get_clause_profile(clause_id, principal)
+    return await get_clause_profile(clause_id, principal, version_id=version_id)
