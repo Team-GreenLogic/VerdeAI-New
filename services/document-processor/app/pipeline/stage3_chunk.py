@@ -5,6 +5,7 @@ generates a document-level summary (one LLM call, cached), then contextualises
 each chunk with a 1-2 sentence preamble (one cheap LLM call per chunk).
 """
 
+import asyncio
 import json
 from io import BytesIO
 from pathlib import Path
@@ -72,7 +73,7 @@ async def run(tenant_id: str, document_id: str) -> int:
         )
 
     # --- Split into chunks ---
-    raw_chunks = _split_markdown(markdown_full)
+    raw_chunks = await asyncio.to_thread(_split_markdown, markdown_full)
     logger.info(
         "Split into chunks",
         document_id=document_id,
