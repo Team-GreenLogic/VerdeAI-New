@@ -5,6 +5,7 @@ Computes FastCDC chunk hashes on raw bytes for near-duplicate (modified doc) det
 pHash (image pages) is deferred to Phase 2 when Docling is available.
 """
 
+import asyncio
 import hashlib
 from io import BytesIO
 
@@ -75,7 +76,7 @@ async def run(tenant_id: str, document_id: str, sha256: str) -> str:
     raw_bytes = buf.getvalue()
 
     # --- FastCDC chunk hashes for near-duplicate detection ---
-    cdc_hashes = _compute_fastcdc_hashes(raw_bytes)
+    cdc_hashes = await asyncio.to_thread(_compute_fastcdc_hashes, raw_bytes)
 
     # --- Check for modified version (>50% chunk overlap with existing doc) ---
     await _check_modified_version(tenant_id, document_id, cdc_hashes, hash_repo, db)
