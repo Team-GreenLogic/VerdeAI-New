@@ -56,6 +56,7 @@ async def run(tenant_id: str, document_id: str) -> int:
                f"Summarising {len(images)} images")
 
     tmpl = _jinja.get_template("image_summary.j2")
+    prompt_text = tmpl.render()
     chunks_repo = ChunksRepository(db, tenant_id)
     image_chunks: list[dict[str, Any]] = []
 
@@ -65,7 +66,7 @@ async def run(tenant_id: str, document_id: str) -> int:
             if not url:
                 continue
             try:
-                summary = await _summarise_image(tmpl, client, url)
+                summary = await _summarise_image(prompt_text, client, url)
                 if summary:
                     image_chunks.append({
                         "tenant_id": tenant_id,
@@ -88,14 +89,13 @@ async def run(tenant_id: str, document_id: str) -> int:
     return len(image_chunks)
 
 
-async def _summarise_image(tmpl: Any, client: httpx.AsyncClient, url: str) -> str:
+async def _summarise_image(prompt_text: str, client: httpx.AsyncClient, url: str) -> str:
     """Download image, encode base64, call vision model."""
     resp = await client.get(url)
     resp.raise_for_status()
     image_data = base64.b64encode(resp.content).decode()
     mime = resp.headers.get("content-type", "image/png").split(";")[0]
 
-    prompt_text = tmpl.render()
     response = await complete(
         model=settings.VISION_MODEL,
         messages=[
