@@ -32,13 +32,14 @@ async def run(tenant_id: str, document_id: str) -> int:
     texts = [c.get("text", "") for c in chunks]
     embeddings = await embed_documents(texts)
 
-    # Bulk update — one update per chunk
-    from motor.motor_asyncio import AsyncIOMotorDatabase  # type: ignore[import-untyped]
-    for chunk, emb in zip(chunks, embeddings):
-        await db.chunks.update_one(
-            {"_id": chunk["_id"]},
-            {"$set": {"embedding": emb}},
-        )
+    # Bulk update — single round-trip to MongoDB instead of N separate calls
+    from pymongo import UpdateOne  # type: ignore[import-untyped]
+    operations = [
+        UpdateOne({"_id": chunk["_id"]}, {"$set": {"embedding": emb}})
+        for chunk, emb in zip(chunks, embeddings)
+    ]
+    if operations:
+        await db.chunks.bulk_write(operations, ordered=False)
 
     # Ensure vector search index exists (idempotent)
     await _ensure_vector_index(db)
