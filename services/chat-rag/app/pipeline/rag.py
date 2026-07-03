@@ -39,6 +39,21 @@ _ORG_FIELDS = {
 }
 
 
+# ── Tracked wrappers for granular Langfuse tracing ──────────────────
+@observe(name="embed_query")  # type: ignore[misc]
+async def _tracked_embed_query(text: str) -> list[float]:
+    """Traced wrapper around Voyage embed_query."""
+    return await embed_query(text)
+
+
+@observe(name="hybrid_retrieve")  # type: ignore[misc]
+async def _tracked_hybrid_retrieve(
+    db: Any, tenant_id: str, question: str, query_vector: list[float]
+) -> list[dict[str, Any]]:
+    """Traced wrapper around hybrid retrieval (vector + BM25 + rerank)."""
+    return await hybrid_retrieve(db, tenant_id, question, query_vector)
+
+
 async def _enrich_chunks_with_filenames(
     db: Any, tenant_id: str, chunks: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -90,6 +105,7 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> tuple[str, list[d
     return "\n\n---\n\n".join(parts), citations
 
 
+@observe(name="load_org_context")  # type: ignore[misc]
 async def _load_org_context(db: Any, tenant_id: str) -> dict[str, str]:
     """Load org profile top-level fields for system prompt."""
     ctx: dict[str, str] = {k: "Not specified" for k in _ORG_FIELDS}
@@ -102,6 +118,7 @@ async def _load_org_context(db: Any, tenant_id: str) -> dict[str, str]:
     return ctx
 
 
+@observe(name="load_analysis_context")  # type: ignore[misc]
 async def _load_analysis_context(db: Any, tenant_id: str) -> str:
     """Load the latest gap analysis results and recommendations for the tenant.
 
@@ -200,7 +217,7 @@ async def rag_stream(
 
     # 1. Embed question
     try:
-        query_vector = await embed_query(question)
+        query_vector = await _tracked_embed_query(question)
     except Exception as exc:
         logger.warning("Embedding failed", error=str(exc))
         query_vector = []
@@ -209,7 +226,7 @@ async def rag_stream(
     chunks: list[dict[str, Any]] = []
     if query_vector:
         try:
-            chunks = await hybrid_retrieve(db, tenant_id, question, query_vector)
+            chunks = await _tracked_hybrid_retrieve(db, tenant_id, question, query_vector)
         except Exception as exc:
             logger.warning("Hybrid retrieval failed", error=str(exc))
 
