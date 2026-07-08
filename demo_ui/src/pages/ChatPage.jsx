@@ -142,8 +142,15 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatPage() {
-  const [sessionId, setSessionId] = useState(null)
-  const [messages, setMessages] = useState([])
+  const [sessionId, setSessionId] = useState(() => {
+    return sessionStorage.getItem('chat_session_id') || null
+  })
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('chat_messages')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
@@ -152,8 +159,26 @@ export default function ChatPage() {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
+  // Persist messages to sessionStorage whenever they change
   useEffect(() => {
-    initSession()
+    // Only save non-streaming messages (skip mid-stream saves)
+    const hasStreaming = messages.some(m => m.streaming)
+    if (!hasStreaming && messages.length > 0) {
+      sessionStorage.setItem('chat_messages', JSON.stringify(messages))
+    }
+  }, [messages])
+
+  // Persist session ID
+  useEffect(() => {
+    if (sessionId) {
+      sessionStorage.setItem('chat_session_id', sessionId)
+    }
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!sessionId) {
+      initSession()
+    }
   }, [])
 
   useEffect(() => {
@@ -175,6 +200,8 @@ export default function ChatPage() {
     setInput('')
     setStreaming(false)
     setError('')
+    sessionStorage.removeItem('chat_messages')
+    sessionStorage.removeItem('chat_session_id')
     initSession()
   }
 
