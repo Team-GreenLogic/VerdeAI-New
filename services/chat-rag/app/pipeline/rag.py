@@ -265,7 +265,9 @@ async def rag_stream(
     if evidence_text:
         context_sections.append(f"--- Retrieved document evidence ---\n{evidence_text}")
     if analysis_context:
-        context_sections.append(analysis_context)
+        context_sections.append(
+            f"<background_gap_analysis_reference>\n{analysis_context}\n</background_gap_analysis_reference>"
+        )
     if context_sections:
         user_content = question + "\n\n" + "\n\n".join(context_sections)
     messages.append({"role": "user", "content": user_content})
