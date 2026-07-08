@@ -60,7 +60,7 @@ export default function LandingPage() {
           
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#" className="hover:text-slate-900 transition-colors">About Project</a>
-            <a href="#" className="hover:text-slate-900 transition-colors">Team Members</a>
+            <a href="#team" className="hover:text-slate-900 transition-colors">Team Members</a>
             <a href="#" className="hover:text-slate-900 transition-colors">ISO 14001</a>
             <a href="#" className="hover:text-slate-900 transition-colors">Documentation</a>
           </div>
@@ -96,14 +96,14 @@ export default function LandingPage() {
           
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
-            <button className="inline-flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-md px-8 py-4 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-gray-200/50 hover:bg-white transition-all hover:scale-105 active:scale-95">
+            <Link to="/login" className="inline-flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-md px-8 py-4 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-gray-200/50 hover:bg-white transition-all hover:scale-105 active:scale-95">
               <PlayIcon className="mr-2 h-5 w-5 text-slate-700" />
               Watch Demo
-            </button>
+            </Link>
           </div>
         </div>
 
-        {/* Dashboard Preview Wrapper */}
+﻿        {/* Dashboard Preview Wrapper */}
         <div className="relative mx-auto max-w-5xl rounded-t-3xl border border-gray-200/60 bg-white/50 backdrop-blur-sm p-4 shadow-2xl animate-fade-in-up h-[600px] overflow-hidden" style={{ animationDelay: '600ms' }}>
           
           {/* Window Controls */}
@@ -229,7 +229,92 @@ export default function LandingPage() {
           {/* Fade out gradient at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#FDFDFD] to-transparent" />
         </div>
+
       </div>
+
+      {/* Our Team Section */}
+      <section id="team" className="py-24 bg-white border-t border-gray-100 mt-20 relative z-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16 animate-fade-in-up">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">Our Team</h2>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-10 md:gap-16">
+            {[
+              { name: 'THARUSHA', id: '235543L', img: 'tharusha.jpg', delay: '100ms' },
+              { name: 'ARRATHIKASARMA', id: '235506D', img: 'arrathikasarma.jpg', delay: '200ms' },
+              { name: 'SAMA', id: '235519U', img: 'sama.jpg', delay: '300ms' },
+              { name: 'RANSIKA', id: '235532D', img: 'ransika.jpg', delay: '400ms' },
+              { name: 'SAJEETHAN', id: '215555G', img: 'sajeethan.jpg', delay: '500ms' },
+            ].map((member) => (
+              <div key={member.id} className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: member.delay, animationFillMode: 'both' }}>
+                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden bg-slate-100 shadow-lg ring-4 ring-white mb-5 transition-transform duration-300 hover:scale-105">
+                  <img
+                    src={`/team/${member.img}`}
+                    alt={member.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = `https://ui-avatars.com/api/?name=${member.name}&background=f1f5f9&color=64748b&size=200`;
+                    }}
+                  />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 tracking-wide">{member.name}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Our Supervisors Section */}
+      <section className="py-20 bg-[#FDFDFD] relative z-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16 animate-fade-in-up">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">Our Supervisors</h2>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-10 md:gap-16">
+            {[
+              { 
+                name: 'Prof. A.S. Karunananda', 
+                img: 'karunananda.jpg', 
+                roles: ['Senior Professor', 'Department of Computational Mathematics', 'Faculty of Information Technology'],
+                delay: '100ms' 
+              },
+              { 
+                name: 'Mr. Lakshitha Attanayaka', 
+                img: 'lakshitha.jpg', 
+                roles: ['Senior Tech Lead', 'Mitra Innovation'],
+                delay: '200ms' 
+              },
+              { 
+                name: 'Mr. Chathuraka Mallawa Arachchi', 
+                img: 'chathuraka.jpg', 
+                roles: ['Senior Tech Lead', 'Mitra Innovation'],
+                delay: '300ms' 
+              },
+            ].map((supervisor) => (
+              <div key={supervisor.name} className="flex flex-col items-center animate-fade-in-up text-center max-w-[300px]" style={{ animationDelay: supervisor.delay, animationFillMode: 'both' }}>
+                <div className="w-40 h-40 md:w-48 md:h-48 rounded-full overflow-hidden bg-slate-100 shadow-lg ring-4 ring-white mb-6 transition-transform duration-300 hover:scale-105">
+                  <img
+                    src={`/team/${supervisor.img}`}
+                    alt={supervisor.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = `https://ui-avatars.com/api/?name=${supervisor.name}&background=f1f5f9&color=64748b&size=200`;
+                    }}
+                  />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 tracking-wide mb-3">{supervisor.name}</h3>
+                {supervisor.roles.map((role, i) => (
+                  <p key={i} className="text-sm font-medium text-slate-500 leading-tight mb-1">{role}</p>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
