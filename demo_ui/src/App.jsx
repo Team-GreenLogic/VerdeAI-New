@@ -12,10 +12,15 @@ import AnalysisListPage from './pages/AnalysisListPage.jsx'
 import AnalysisDetailPage from './pages/AnalysisDetailPage.jsx'
 import ChatPage from './pages/ChatPage.jsx'
 
+import LandingPage from './pages/LandingPage.jsx'
+
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
+      {/* Public Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Public Auth */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
@@ -45,9 +50,8 @@ function AppRoutes() {
         element={<ProtectedRoute><Layout><ChatPage /></Layout></ProtectedRoute>}
       />
 
-      {/* Default */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Catch all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
