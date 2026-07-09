@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext.jsx'
-import ProtectedRoute from './components/ProtectedRoute.jsx'
+import ProtectedRoute, { AdminRoute } from './components/ProtectedRoute.jsx'
 import Layout from './components/Layout.jsx'
 
 import Login from './pages/Login.jsx'
@@ -11,6 +11,8 @@ import OrgProfilePage from './pages/OrgProfilePage.jsx'
 import AnalysisListPage from './pages/AnalysisListPage.jsx'
 import AnalysisDetailPage from './pages/AnalysisDetailPage.jsx'
 import ChatPage from './pages/ChatPage.jsx'
+import AdminVersionsPage from './pages/AdminVersionsPage.jsx'
+import AdminVersionDetailPage from './pages/AdminVersionDetailPage.jsx'
 
 import LandingPage from './pages/LandingPage.jsx'
 
@@ -50,8 +52,19 @@ function AppRoutes() {
         element={<ProtectedRoute><Layout><ChatPage /></Layout></ProtectedRoute>}
       />
 
-      {/* Catch all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Admin-only */}
+      <Route
+        path="/admin/versions"
+        element={<AdminRoute><Layout><AdminVersionsPage /></Layout></AdminRoute>}
+      />
+      <Route
+        path="/admin/versions/:vid"
+        element={<AdminRoute><Layout><AdminVersionDetailPage /></Layout></AdminRoute>}
+      />
+
+      {/* Default */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

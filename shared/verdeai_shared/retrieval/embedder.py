@@ -31,8 +31,11 @@ async def embed_documents(texts: list[str]) -> list[list[float]]:
     """Embed a list of document texts. Batches up to EMBED_BATCH_SIZE."""
     all_embeddings: list[list[float]] = []
     batch_size = settings.EMBED_BATCH_SIZE
+    delay = settings.EMBED_BATCH_DELAY
 
     for i in range(0, len(texts), batch_size):
+        if i > 0 and delay > 0:
+            await asyncio.sleep(delay)
         batch = texts[i : i + batch_size]
         all_embeddings.extend(await _embed_batch(batch, input_type="document"))
 

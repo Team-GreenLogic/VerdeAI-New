@@ -29,6 +29,7 @@ services:
     depends_on:
       mongodb:  { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      redis:    { condition: service_healthy }
 
   gap-analyzer:
     build: { context: ., dockerfile: services/gap-analyzer/Dockerfile }

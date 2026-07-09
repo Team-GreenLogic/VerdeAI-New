@@ -82,9 +82,25 @@ async def declare_topology(channel: Channel) -> None:
     iso_ex = await channel.declare_exchange(
         "iso", ExchangeType.TOPIC, durable=True
     )
+    iso_dlx = await channel.declare_exchange(
+        "iso.dlx", ExchangeType.FANOUT, durable=True
+    )
+
     iso_cache_q = await channel.declare_queue(
         "iso.cache_bust",
         durable=True,
         arguments=_QUORUM,
     )
     await iso_cache_q.bind(iso_ex, routing_key="iso.#")
+
+    iso_build_q = await channel.declare_queue(
+        "iso.build",
+        durable=True,
+        arguments={**_QUORUM_WITH_DLX, "x-dead-letter-exchange": "iso.dlx"},
+    )
+    await iso_build_q.bind(iso_ex, routing_key="iso.build.requested")
+
+    iso_dlq = await channel.declare_queue(
+        "iso.dlq", durable=True, arguments=_QUORUM
+    )
+    await iso_dlq.bind(iso_dlx)

@@ -28,25 +28,49 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type
         IndexModel([("tenant_id", ASCENDING)], unique=True),
     ])
 
-    # iso_clauses
+    # iso_versions (global, no tenant)
+    await db.iso_versions.create_indexes([
+        IndexModel([("version_id", ASCENDING)], unique=True),
+        IndexModel([("status", ASCENDING)]),
+    ])
+
+    # iso_clauses — now unique per (version_id, clause_id)
+    # Drop legacy single-field unique index if it still exists from old schema
+    try:
+        await db.iso_clauses.drop_index("clause_id_1")
+    except Exception:
+        pass
     await db.iso_clauses.create_indexes([
-        IndexModel([("clause_id", ASCENDING)], unique=True),
+        IndexModel([("version_id", ASCENDING), ("clause_id", ASCENDING)], unique=True),
+        IndexModel([("version_id", ASCENDING)]),
     ])
 
-    # iso_state_template
+    # iso_state_template — now unique per (version_id, field_path)
+    # Drop legacy single-field unique indexes if they still exist
+    for _old_idx in ("field_path_1", "clause_id_1"):
+        try:
+            await db.iso_state_template.drop_index(_old_idx)
+        except Exception:
+            pass
     await db.iso_state_template.create_indexes([
-        IndexModel([("field_path", ASCENDING)], unique=True),
-        IndexModel([("clause_id", ASCENDING)]),
+        IndexModel([("version_id", ASCENDING), ("field_path", ASCENDING)], unique=True),
+        IndexModel([("version_id", ASCENDING), ("clause_id", ASCENDING)]),
     ])
 
-    # org_profile
+    # org_profile — now unique per (tenant_id, version_id, field_path)
     await db.org_profile.create_indexes([
-        IndexModel([("tenant_id", ASCENDING), ("field_path", ASCENDING)], unique=True),
+        IndexModel(
+            [("tenant_id", ASCENDING), ("version_id", ASCENDING), ("field_path", ASCENDING)],
+            unique=True,
+        ),
     ])
 
-    # state_store
+    # state_store — now unique per (tenant_id, version_id, clause_id)
     await db.state_store.create_indexes([
-        IndexModel([("tenant_id", ASCENDING), ("clause_id", ASCENDING)], unique=True),
+        IndexModel(
+            [("tenant_id", ASCENDING), ("version_id", ASCENDING), ("clause_id", ASCENDING)],
+            unique=True,
+        ),
     ])
 
     # result_store
@@ -68,9 +92,10 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type
         IndexModel([("analysis_id", ASCENDING)]),
     ])
 
-    # analyses
+    # analyses — include version_id index
     await db.analyses.create_indexes([
         IndexModel([("tenant_id", ASCENDING), ("status", ASCENDING)]),
+        IndexModel([("tenant_id", ASCENDING), ("version_id", ASCENDING)]),
     ])
 
     # chat_history

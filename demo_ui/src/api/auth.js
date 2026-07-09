@@ -25,3 +25,23 @@ export function logout() {
 export function isLoggedIn() {
   return !!localStorage.getItem('access_token')
 }
+
+export function getRoles() {
+  const token = localStorage.getItem('access_token')
+  if (!token) return []
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload?.realm_access?.roles ?? []
+  } catch (_) {
+    return []
+  }
+}
+
+export function isAdmin() {
+  return getRoles().includes('admin')
+}
+
+export async function fetchMe() {
+  const { apiGet } = await import('./client.js')
+  return apiGet('/auth/me')
+}

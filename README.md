@@ -18,7 +18,9 @@ VerdeAI is a multi-tenant SaaS platform that automates ISO 14001 Environmental M
 - **Gap analysis** — LangGraph state machine iterates all ISO 14001 clauses, retrieves relevant evidence, and evaluates compliance with structured reasoning
 - **Recommendations** — Auto-generated prioritised action items for each identified gap
 - **Missing requirements** — Flags missing organisational data fields needed for a complete assessment
-- **Conversational RAG** — Chat interface with hybrid vector + BM25 retrieval and streaming responses, aware of your gap analysis results
+- **Conversational RAG** — Chat interface with hybrid vector + BM25 retrieval and streaming responses, aware of your gap analysis results; messages rendered as markdown
+- **ISO versioning** — LLM-driven pipeline that detects structure, extracts clauses, and verifies coverage from ISO standard documents; versioned clause sets stored in MongoDB
+- **Admin UI** — Admin pages for managing ISO standard versions, publishing new versions, and inspecting version details
 - **Multi-tenancy** — All data isolated per tenant via Keycloak JWT claims; no cross-tenant data leakage
 - **Observability** — Full LLM trace capture via self-hosted Langfuse with cost tracking
 
@@ -72,7 +74,7 @@ VerdeAI is a multi-tenant SaaS platform that automates ISO 14001 Environmental M
 | `gap-analyzer` | RabbitMQ worker ×2 | LangGraph state machine — iterates ISO 14001 clauses, retrieves evidence, evaluates compliance |
 | `recommendation` | RabbitMQ worker | Generates prioritised recommendations for identified gaps |
 | `missing-requirements` | RabbitMQ worker | Drafts information-request messages for missing state fields |
-| `iso-knowledge` | RabbitMQ worker + CLI | Seeds ISO 14001 clause data and org state templates |
+| `iso-knowledge` | RabbitMQ worker + CLI | Seeds ISO 14001 clause data, org state templates, and runs the LLM-driven ISO versioning pipeline |
 
 ---
 
@@ -357,6 +359,9 @@ All LLM calls are automatically traced via `langfuse.openai` (transparent drop-i
 | `chunk_summary` | Document summary generation |
 | `contextualise_chunk` | Chunk contextualisation |
 | `image_summary` | Image/diagram summarisation |
+| `iso_detect_structure` | ISO document structure detection (versioning pipeline) |
+| `iso_extract_clause` | ISO clause extraction (versioning pipeline) |
+| `iso_verify_coverage` | ISO clause coverage verification (versioning pipeline) |
 
 ### Accessing the Dashboard
 
@@ -490,8 +495,8 @@ VerdeAI/
 ├── shared/
 │   └── verdeai_shared/       # Library imported by all services
 │       ├── auth/             # Keycloak JWT validation + tenant ContextVar
-│       ├── db/               # Motor connection + 12 repositories (auto-inject tenant_id)
-│       ├── llm/              # OpenRouter async client + 12 Jinja2 prompt templates
+│       ├── db/               # Motor connection + repositories (auto-inject tenant_id), incl. iso_versions
+│       ├── llm/              # OpenRouter async client + Jinja2 prompt templates (incl. iso_detect_structure, iso_extract_clause, iso_verify_coverage)
 │       ├── messaging/        # aio-pika consumers, publishers, event models
 │       ├── retrieval/        # Voyage AI embeddings, reranker, hybrid search
 │       ├── parsing/          # LlamaParse adapter, HybridChunker, dedup
@@ -500,11 +505,11 @@ VerdeAI/
 │
 ├── demo_ui/                  # React 18 + Vite SPA (port 5173 dev)
 │   └── src/
-│       ├── api/              # apiFetch, auth, documents, analyses, chat
+│       ├── api/              # apiFetch, auth, documents, analyses, chat, admin
 │       ├── context/          # AuthContext
 │       ├── hooks/            # useJobProgress (WebSocket)
-│       ├── components/       # Layout, Sidebar, Badge, Spinner
-│       └── pages/            # Login, Dashboard, Documents, Analysis, Chat
+│       ├── components/       # Layout, Sidebar, Badge, Spinner, ProtectedRoute
+│       └── pages/            # Login, Dashboard, Documents, Analysis, Chat, AdminVersions, AdminVersionDetail
 │
 ├── infra/
 │   ├── keycloak/             # realm-export.json (realm, clients, roles)
