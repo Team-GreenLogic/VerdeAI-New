@@ -56,28 +56,30 @@ async def run(tenant_id: str, document_id: str) -> int:
                f"Summarising {len(images)} images")
 
     tmpl = _jinja.get_template("image_summary.j2")
+    prompt_text = tmpl.render()
     chunks_repo = ChunksRepository(db, tenant_id)
     image_chunks: list[dict[str, Any]] = []
 
-    for img in images:
-        url: str = img.get("url") or img.get("presigned_url") or ""
-        if not url:
-            continue
-        try:
-            summary = await _summarise_image(tmpl, url)
-            if summary:
-                image_chunks.append({
-                    "tenant_id": tenant_id,
-                    "document_id": document_id,
-                    "text": summary,
-                    "context_preamble": "",
-                    "content_type": "image_summary",
-                    "page": img.get("page_number", 1),
-                    "embedding": [],
-                    "image_metadata": {k: v for k, v in img.items() if k != "url"},
-                })
-        except Exception as exc:
-            logger.warning("Image summary failed", url=url[:80], error=str(exc))
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for img in images:
+            url: str = img.get("url") or img.get("presigned_url") or ""
+            if not url:
+                continue
+            try:
+                summary = await _summarise_image(prompt_text, client, url)
+                if summary:
+                    image_chunks.append({
+                        "tenant_id": tenant_id,
+                        "document_id": document_id,
+                        "text": summary,
+                        "context_preamble": "",
+                        "content_type": "image_summary",
+                        "page": img.get("page_number", 1),
+                        "embedding": [],
+                        "image_metadata": {k: v for k, v in img.items() if k != "url"},
+                    })
+            except Exception as exc:
+                logger.warning("Image summary failed", url=url[:80], error=str(exc))
 
     if image_chunks:
         await chunks_repo.insert_many(image_chunks)
@@ -87,15 +89,13 @@ async def run(tenant_id: str, document_id: str) -> int:
     return len(image_chunks)
 
 
-async def _summarise_image(tmpl: Any, url: str) -> str:
+async def _summarise_image(prompt_text: str, client: httpx.AsyncClient, url: str) -> str:
     """Download image, encode base64, call vision model."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        image_data = base64.b64encode(resp.content).decode()
-        mime = resp.headers.get("content-type", "image/png").split(";")[0]
+    resp = await client.get(url)
+    resp.raise_for_status()
+    image_data = base64.b64encode(resp.content).decode()
+    mime = resp.headers.get("content-type", "image/png").split(";")[0]
 
-    prompt_text = tmpl.render()
     response = await complete(
         model=settings.VISION_MODEL,
         messages=[

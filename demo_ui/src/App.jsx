@@ -14,10 +14,15 @@ import ChatPage from './pages/ChatPage.jsx'
 import AdminVersionsPage from './pages/AdminVersionsPage.jsx'
 import AdminVersionDetailPage from './pages/AdminVersionDetailPage.jsx'
 
+import LandingPage from './pages/LandingPage.jsx'
+
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
+      {/* Public Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Public Auth */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 

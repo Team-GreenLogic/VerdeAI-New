@@ -124,6 +124,7 @@ async def _emit_step(step_name: str, config: RunnableConfig) -> None:
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
 
+@observe(as_type="span")  # type: ignore[misc]
 async def _embed_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("embed", config)
     clause = state["clause"]
@@ -135,6 +136,7 @@ async def _embed_node(state: ClauseState, config: RunnableConfig) -> dict[str, A
     return {"query_vector": vector}
 
 
+@observe(as_type="span")  # type: ignore[misc]
 async def _retrieve_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("retrieve", config)
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
@@ -177,6 +179,7 @@ async def _load_state_template_node(state: ClauseState, config: RunnableConfig) 
     }
 
 
+@observe(as_type="generation")  # type: ignore[misc]
 async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("state_compare", config)
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
@@ -213,6 +216,7 @@ async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dic
     return {"state_diff": state_diff}
 
 
+@observe(as_type="generation")  # type: ignore[misc]
 async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("gap_analyse", config)
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]

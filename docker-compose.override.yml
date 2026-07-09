@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 # Local development overrides: bind-mount source for hot-reload
 services:

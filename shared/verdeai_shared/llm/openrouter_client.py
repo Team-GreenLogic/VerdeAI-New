@@ -6,6 +6,7 @@ from typing import Any
 from loguru import logger
 
 from verdeai_shared.settings import settings
+from verdeai_shared.llm.tracing import trace
 
 
 def _update_langfuse_observation(name: str | None, messages: list[dict[str, Any]]) -> None:
@@ -47,6 +48,7 @@ def _get_client() -> Any:
     return _client
 
 
+@trace(name="openrouter_complete")
 async def complete(
     *,
     model: str,
@@ -80,6 +82,7 @@ async def complete(
     return await client.chat.completions.create(**kwargs)
 
 
+
 async def stream(
     *,
     model: str,
@@ -107,6 +110,7 @@ async def stream(
         yield chunk
 
 
+@trace(name="openrouter_stream_reasoning")
 async def stream_with_reasoning(
     *,
     model: str,

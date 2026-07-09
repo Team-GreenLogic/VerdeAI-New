@@ -59,10 +59,7 @@ async def remove_document_from_bm25_index(
         return
 
     new_ids, new_texts = zip(*kept)
-    tokenized = bm25s.tokenize(list(new_texts))
-    index = bm25s.BM25()
-    index.index(tokenized)
-    serialized = pickle.dumps(index)
+    serialized = await asyncio.to_thread(_build_and_serialize_index, list(new_texts))
 
     await db["bm25_indexes"].update_one(
         {"tenant_id": tenant_id},
@@ -95,10 +92,7 @@ async def update_bm25_index(
     all_texts = existing_texts + new_texts
     all_ids = existing_ids + new_chunk_ids
 
-    tokenized = bm25s.tokenize(all_texts)
-    index = bm25s.BM25()
-    index.index(tokenized)
-    serialized = pickle.dumps(index)
+    serialized = await asyncio.to_thread(_build_and_serialize_index, all_texts)
 
     await db["bm25_indexes"].update_one(
         {"tenant_id": tenant_id},
@@ -113,3 +107,11 @@ async def update_bm25_index(
         },
         upsert=True,
     )
+
+
+def _build_and_serialize_index(texts: list[str]) -> bytes:
+    """Helper to tokenize and build BM25 index synchronously."""
+    tokenized = bm25s.tokenize(texts)
+    index = bm25s.BM25()
+    index.index(tokenized)
+    return pickle.dumps(index)

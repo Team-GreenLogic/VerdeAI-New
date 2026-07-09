@@ -5,6 +5,7 @@ generates a document-level summary (one LLM call, cached), then contextualises
 each chunk with a 1-2 sentence preamble (one cheap LLM call per chunk).
 """
 
+import asyncio
 import json
 from io import BytesIO
 from pathlib import Path
@@ -72,7 +73,7 @@ async def run(tenant_id: str, document_id: str) -> int:
         )
 
     # --- Split into chunks ---
-    raw_chunks = _split_markdown(markdown_full)
+    raw_chunks = await asyncio.to_thread(_split_markdown, markdown_full)
     logger.info(
         "Split into chunks",
         document_id=document_id,
@@ -82,24 +83,30 @@ async def run(tenant_id: str, document_id: str) -> int:
     await emit(tenant_id, document_id, "chunk", "running",
                f"Contextualising {len(raw_chunks)} chunks")
 
-    # --- Contextualise each chunk ---
+    # --- Contextualise each chunk in batches ---
     tmpl = _jinja.get_template("contextualise_chunk.j2")
     chunks_repo = ChunksRepository(db, tenant_id)
     chunk_docs: list[dict[str, Any]] = []
 
-    for i, chunk_text in enumerate(raw_chunks):
-        preamble = await _contextualise(tmpl, summary, chunk_text)
-        full_text = f"CONTEXT: {preamble}\n\n{chunk_text}" if preamble else chunk_text
-        chunk_docs.append({
-            "tenant_id": tenant_id,
-            "document_id": document_id,
-            "chunk_index": i,
-            "text": full_text,
-            "context_preamble": preamble,
-            "content_type": "text",
-            "page": _estimate_page(i, len(raw_chunks), doc.get("pages", 1)),
-            "embedding": [],   # filled by Stage 5
-        })
+    batch_size = 5
+    for i in range(0, len(raw_chunks), batch_size):
+        batch = raw_chunks[i:i + batch_size]
+        preambles_dict = await _contextualise_batch(tmpl, summary, batch)
+        
+        for j, chunk_text in enumerate(batch):
+            global_index = i + j
+            preamble = preambles_dict.get(str(j), "")
+            full_text = f"CONTEXT: {preamble}\n\n{chunk_text}" if preamble else chunk_text
+            chunk_docs.append({
+                "tenant_id": tenant_id,
+                "document_id": document_id,
+                "chunk_index": global_index,
+                "text": full_text,
+                "context_preamble": preamble,
+                "content_type": "text",
+                "page": _estimate_page(global_index, len(raw_chunks), doc.get("pages", 1)),
+                "embedding": [],   # filled by Stage 5
+            })
 
     inserted_ids = await chunks_repo.insert_many(chunk_docs)
     logger.info(
@@ -151,21 +158,22 @@ async def _generate_summary(text: str) -> str:
         return ""
 
 
-async def _contextualise(tmpl: Any, summary: str, chunk_text: str) -> str:
-    """Generate a 1-2 sentence contextual preamble for a chunk."""
-    prompt = tmpl.render(document_summary=summary, chunk_text=chunk_text[:1500])
+async def _contextualise_batch(tmpl: Any, summary: str, chunks: list[str]) -> dict[str, str]:
+    """Generate contextual preambles for a batch of chunks."""
+    prompt = tmpl.render(document_summary=summary, chunks=chunks)
     try:
         resp = await complete(
             model=settings.CHEAP_REASONING_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=80,
+            max_tokens=150 * len(chunks),
             temperature=0.0,
-            name="contextualise_chunk",
+            response_format={"type": "json_object"},
+            name="contextualise_chunk_batch",
         )
-        return resp.choices[0].message.content.strip()
+        return json.loads(resp.choices[0].message.content)
     except Exception as exc:
-        logger.warning("Contextualisation failed", error=str(exc))
-        return ""
+        logger.warning("Contextualisation batch failed", error=str(exc))
+        return {}
 
 
 def _estimate_page(chunk_index: int, total_chunks: int, total_pages: int) -> int:

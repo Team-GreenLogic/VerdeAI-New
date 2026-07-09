@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { register, login } from '../api/auth.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import Spinner from '../components/Spinner.jsx'
+import Logo from '../components/Logo.jsx'
 
 const LeafIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
@@ -68,15 +69,18 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-12">
-      <div className="w-full max-w-sm">
+    <div className="relative flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 overflow-hidden">
+      {/* Animated background blobs */}
+      <div className="bg-blob bg-blob-1" />
+      <div className="bg-blob bg-blob-2" />
+      <div className="bg-blob bg-blob-3" />
+
+      <div className="relative z-10 w-full max-w-sm animate-fade-in-up">
         {/* Brand mark */}
-        <div className="mb-8 text-center">
-          <span className="inline-flex items-center justify-center text-brand-400 mb-3">
-            <LeafIcon />
-          </span>
-          <h1 className="text-2xl font-bold text-white">VerdeAI</h1>
-          <p className="mt-1 text-sm text-slate-400">Create your compliance workspace</p>
+        <div className="mb-8 text-center flex flex-col items-center">
+          <Logo className="w-16 h-16 mb-4" />
+          <h1 className="text-2xl font-bold text-slate-900 mt-2">VerdeAI</h1>
+          <p className="mt-1 text-sm text-slate-500">ISO 14001 Compliance Assistant</p>
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-2xl">

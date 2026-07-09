@@ -32,33 +32,28 @@ const CloseSVG = () => (
   </svg>
 )
 
-function CitationModal({ citation, onClose }) {
+function CitationPanel({ citation, onClose }) {
   if (!citation) return null
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-5 flex flex-col gap-3"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2">
-            <span className="text-slate-400 mt-0.5"><DocSVG /></span>
-            <div>
-              <p className="font-semibold text-slate-800 text-sm">{citation.filename}</p>
-              <p className="text-xs text-slate-400 mt-0.5">Page {citation.page}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <CloseSVG />
-          </button>
+    <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-slate-200 shadow-2xl z-40 flex flex-col animate-slide-in-right">
+      <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
+        <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+          <DocSVG />
+          Document Reference
+        </h3>
+        <button
+          onClick={onClose}
+          className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors"
+        >
+          <CloseSVG />
+        </button>
+      </div>
+      <div className="p-5 overflow-y-auto scrollbar-thin">
+        <div className="mb-4">
+          <p className="font-semibold text-brand-700 text-sm">{citation.filename}</p>
+          <p className="text-xs text-slate-500 mt-1">Page {citation.page}</p>
         </div>
-        <div className="bg-slate-50 rounded-xl px-4 py-3 text-xs text-slate-700 leading-relaxed whitespace-pre-wrap max-h-72 overflow-y-auto scrollbar-thin">
+        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
           {citation.text || 'No excerpt available.'}
         </div>
       </div>
@@ -70,7 +65,7 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
   const [showCitations, setShowCitations] = useState(false)
 
   return (
-    <div className={`flex gap-2 ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-3 animate-fade-in-up ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {/* Assistant avatar */}
       {role === 'assistant' && (
         <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center flex-shrink-0 mt-1">
@@ -82,10 +77,10 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
 
       <div className={`max-w-[75%] ${role === 'user' ? 'order-2' : ''}`}>
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+          className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
             role === 'user'
               ? 'bg-brand-600 text-white rounded-tr-sm'
-              : 'bg-white border border-slate-200 shadow-sm text-slate-800 rounded-tl-sm'
+              : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm'
           }`}
         >
           {streaming && !content ? (
@@ -179,8 +174,15 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatPage() {
-  const [sessionId, setSessionId] = useState(null)
-  const [messages, setMessages] = useState([])
+  const [sessionId, setSessionId] = useState(() => {
+    return sessionStorage.getItem('chat_session_id') || null
+  })
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('chat_messages')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
@@ -189,8 +191,26 @@ export default function ChatPage() {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
+  // Persist messages to sessionStorage whenever they change
   useEffect(() => {
-    initSession()
+    // Only save non-streaming messages (skip mid-stream saves)
+    const hasStreaming = messages.some(m => m.streaming)
+    if (!hasStreaming && messages.length > 0) {
+      sessionStorage.setItem('chat_messages', JSON.stringify(messages))
+    }
+  }, [messages])
+
+  // Persist session ID
+  useEffect(() => {
+    if (sessionId) {
+      sessionStorage.setItem('chat_session_id', sessionId)
+    }
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!sessionId) {
+      initSession()
+    }
   }, [])
 
   useEffect(() => {
@@ -212,6 +232,8 @@ export default function ChatPage() {
     setInput('')
     setStreaming(false)
     setError('')
+    sessionStorage.removeItem('chat_messages')
+    sessionStorage.removeItem('chat_session_id')
     initSession()
   }
 
@@ -274,10 +296,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto">
-      <CitationModal citation={activeCitation} onClose={() => setActiveCitation(null)} />
-
-      {/* Header */}
+    <div className="relative flex h-full overflow-hidden">
+      <div className="flex flex-col h-full flex-1 max-w-4xl mx-auto px-4 w-full transition-all duration-300">
+        {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-slate-200">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Compliance Chat</h1>
@@ -367,10 +388,13 @@ export default function ChatPage() {
             {streaming ? <Spinner size="sm" /> : <SendSVG />}
           </button>
         </div>
-        <p className="text-xs text-slate-400 mt-2 text-center">
+        <p className="text-xs text-slate-400 mt-3 text-center mb-2">
           Responses are grounded in your uploaded documents. Always verify important decisions.
         </p>
       </div>
+      </div>
+      
+      <CitationPanel citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   )
 }

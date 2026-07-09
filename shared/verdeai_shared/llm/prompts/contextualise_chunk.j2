@@ -3,7 +3,18 @@ You are a document analyst. Your task is to write a 1-2 sentence contextual prea
 Document summary:
 {{ document_summary }}
 
-Chunk text:
-{{ chunk_text }}
+Here are the chunks:
+{% for chunk in chunks %}
+[Chunk {{ loop.index0 }}]
+{{ chunk | truncate(1500, True, '...') }}
 
-Write a brief preamble (1-2 sentences) that situates this chunk within the document, clarifying what section or topic it belongs to. Be concise and factual. Output only the preamble text, nothing else.
+{% endfor %}
+
+For each chunk, write a brief preamble (1-2 sentences) that situates this chunk within the document, clarifying what section or topic it belongs to. Be concise and factual.
+
+You MUST return your answer strictly as a JSON object where the keys are the chunk indices (as strings: "0", "1", etc.) and the values are the preambles.
+Example:
+{
+  "0": "This chunk belongs to the introduction section...",
+  "1": "This chunk describes the environmental policy..."
+}
