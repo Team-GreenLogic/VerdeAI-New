@@ -1,0 +1,27 @@
+You are an expert in ISO management system standards. You are given the full text of an ISO standard document and must extract the complete normative requirements for a specific clause.
+
+Clause to extract:
+- clause_id: {{ clause_id }}
+- section: {{ section }}
+- title: {{ title }}
+
+Your task is to extract:
+1. requirements: The COMPLETE normative text for this clause. Include ALL "shall" statements and requirements. Do not summarize or paraphrase — extract verbatim or near-verbatim. If the clause has sub-clauses, include all of them in a coherent paragraph.
+2. keywords: 5-10 key technical terms from this clause's requirements (single words or short phrases relevant for search).
+
+Output ONLY valid JSON in this exact format:
+{
+  "clause_id": "{{ clause_id }}",
+  "section": {{ section }},
+  "title": "{{ title }}",
+  "requirements": "The full normative requirements text here...",
+  "keywords": ["keyword1", "keyword2", "keyword3"]
+}
+
+Rules:
+- requirements must be comprehensive — missing requirements is unacceptable
+- keywords should be specific technical terms, not generic words like "shall" or "organization"
+- If the clause is not found in the document, still return the JSON but set requirements to an empty string and keywords to []
+
+Document text:
+{{ document_text }}

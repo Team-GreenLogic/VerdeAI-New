@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
+from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
 from verdeai_shared.messaging.events import AnalysisRequested
 
 from app.services.analysis_publisher import publish_analysis_requested
@@ -24,11 +25,19 @@ class AnalysisSummary(BaseModel):
     status: str
     gap_count: int | None
     scope: Any
+    version_id: str = DEFAULT_VERSION_ID
     created_at: datetime
+
+
+class VersionItem(BaseModel):
+    version_id: str
+    name: str
+    description: str
 
 
 class AnalysisCreateRequest(BaseModel):
     scope: Literal["full"] | dict[str, list[str]] = "full"
+    version_id: str = DEFAULT_VERSION_ID
 
 
 class AnalysisCreateResponse(BaseModel):
@@ -80,6 +89,21 @@ async def _assert_no_active(db: Any, tenant_id: str) -> None:
         )
 
 
+@router.get("/versions", response_model=list[VersionItem])
+async def list_published_versions(principal: CurrentPrincipal) -> list[VersionItem]:
+    """Return all published ISO versions available for analysis."""
+    db = get_database()
+    versions = await ISOVersionsRepository(db).list_published()
+    return [
+        VersionItem(
+            version_id=v["version_id"],
+            name=v.get("name", v["version_id"]),
+            description=v.get("description", ""),
+        )
+        for v in versions
+    ]
+
+
 @router.get("", response_model=list[AnalysisSummary])
 async def list_analyses(principal: CurrentPrincipal) -> list[AnalysisSummary]:
     """List all analyses for the current tenant, newest first."""
@@ -97,6 +121,7 @@ async def list_analyses(principal: CurrentPrincipal) -> list[AnalysisSummary]:
             status=r.get("status", "unknown"),
             gap_count=r.get("gap_count"),
             scope=r.get("scope"),
+            version_id=r.get("version_id", DEFAULT_VERSION_ID),
             created_at=r.get("created_at", datetime.now(timezone.utc)),
         )
         for r in rows
@@ -114,12 +139,22 @@ async def create_analysis(
 
     await _assert_no_active(db, tenant_id)
 
+    # Validate that the requested version is published
+    version_id = body.version_id
+    version_doc = await ISOVersionsRepository(db).get(version_id)
+    if not version_doc or version_doc.get("status") != "published":
+        raise HTTPException(
+            status_code=422,
+            detail=f"ISO version '{version_id}' is not available. Choose a published version.",
+        )
+
     analysis_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     await db.analyses.insert_one({
         "analysis_id": analysis_id,
         "tenant_id": tenant_id,
         "scope": body.scope,
+        "version_id": version_id,
         "status": "pending",
         "gap_count": None,
         "created_at": now,
@@ -129,6 +164,7 @@ async def create_analysis(
         tenant_id=tenant_id,
         analysis_id=analysis_id,
         scope=body.scope,
+        version_id=version_id,
     )
     try:
         await publish_analysis_requested(event)
@@ -202,6 +238,7 @@ async def resume_analysis(
         tenant_id=tenant_id,
         analysis_id=analysis_id,
         scope=doc["scope"],
+        version_id=doc.get("version_id", DEFAULT_VERSION_ID),
     )
     try:
         await publish_analysis_requested(event)

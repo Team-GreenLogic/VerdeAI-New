@@ -65,3 +65,16 @@ async def get_current_principal(
 
 # Type alias for use in route signatures
 CurrentPrincipal = Annotated[Principal, Depends(get_current_principal)]
+
+
+async def require_admin(principal: Annotated[Principal, Depends(get_current_principal)]) -> Principal:
+    """FastAPI dependency: raises 403 unless the principal holds the 'admin' role."""
+    if "admin" not in principal.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return principal
+
+
+CurrentAdmin = Annotated[Principal, Depends(require_admin)]

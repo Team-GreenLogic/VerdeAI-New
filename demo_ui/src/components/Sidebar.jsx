@@ -49,8 +49,20 @@ const NAV = [
   },
 ]
 
+const ADMIN_NAV = [
+  {
+    to: '/admin/versions',
+    label: 'ISO Versions',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+    ),
+  },
+]
+
 export default function Sidebar({ isOpen, onClose }) {
-  const { logout } = useAuth()
+  const { logout, isAdmin } = useAuth()
   const navigate = useNavigate()
 
   function handleLogout() {
@@ -107,6 +119,35 @@ export default function Sidebar({ isOpen, onClose }) {
               )}
             </NavLink>
           ))}
+
+          {isAdmin && (
+            <>
+              <div className="pt-3 pb-1 px-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Admin</p>
+              </div>
+              {ADMIN_NAV.map(({ to, label, icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                      isActive
+                        ? 'bg-slate-800 text-white border-l-2 border-amber-400 pl-2.5'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <span className={isActive ? 'text-amber-400' : 'text-slate-500'}>{icon}</span>
+                      {label}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </>
+          )}
         </nav>
 
         {/* Divider */}

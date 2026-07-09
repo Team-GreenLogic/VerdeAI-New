@@ -42,6 +42,7 @@ class AnalysisRequested(BaseModel):
     tenant_id: str
     analysis_id: str
     scope: Literal["full"] | dict[str, list[str]]
+    version_id: str = "iso-14001-2015"
 
 
 class AnalysisGapsReady(BaseModel):
@@ -71,3 +72,13 @@ class AnalysisCompleted(BaseModel):
     event_id: str = Field(default_factory=_new_event_id)
     tenant_id: str
     analysis_id: str
+
+
+class IsoVersionBuildRequested(BaseModel):
+    schema_version: int = 1
+    event_id: str = Field(default_factory=_new_event_id)
+    version_id: str
+    build_job_id: str
+    tenant_id: str = ""
+    source_docs: list[dict[str, str]]  # [{gridfs_id, filename}]
+    requested_by: str  # admin email

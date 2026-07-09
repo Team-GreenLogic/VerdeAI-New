@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
+const InListContext = createContext(false)
 import { createSession, streamChat } from '../api/chat.js'
 import Spinner from '../components/Spinner.jsx'
 
@@ -90,12 +94,45 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
             </span>
-          ) : (
-            <>
-              {content}
+          ) : role === 'assistant' ? (
+            <div className="text-sm leading-relaxed text-slate-800 space-y-1">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => {
+                    const inList = useContext(InListContext)
+                    return inList ? <>{children}</> : <p className="my-1 leading-relaxed">{children}</p>
+                  },
+                  ul: ({ children }) => <ul className="list-disc list-outside pl-4 my-1 space-y-0">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-outside pl-4 my-1 space-y-0">{children}</ol>,
+                  li: ({ children }) => (
+                    <InListContext.Provider value={true}>
+                      <li className="leading-relaxed">{children}</li>
+                    </InListContext.Provider>
+                  ),
+                  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  code: ({ inline, children }) => inline
+                    ? <code className="bg-slate-100 text-slate-700 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
+                    : <code className="block bg-slate-100 text-slate-700 rounded-lg p-3 text-xs font-mono overflow-x-auto my-1">{children}</code>,
+                  pre: ({ children }) => <pre className="my-1">{children}</pre>,
+                  blockquote: ({ children }) => <blockquote className="border-l-2 border-brand-400 pl-3 text-slate-600 my-1">{children}</blockquote>,
+                  h1: ({ children }) => <h1 className="font-semibold text-base text-slate-900 my-1">{children}</h1>,
+                  h2: ({ children }) => <h2 className="font-semibold text-sm text-slate-900 my-1">{children}</h2>,
+                  h3: ({ children }) => <h3 className="font-semibold text-sm text-slate-900 my-0.5">{children}</h3>,
+                  a: ({ href, children }) => <a href={href} className="text-brand-600 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+                  table: ({ children }) => <table className="text-xs border-collapse my-1 w-full">{children}</table>,
+                  th: ({ children }) => <th className="bg-slate-50 border border-slate-200 px-2 py-1 text-left font-semibold">{children}</th>,
+                  td: ({ children }) => <td className="border border-slate-200 px-2 py-1">{children}</td>,
+                }}
+              >{content}</ReactMarkdown>
               {streaming && (
                 <span className="inline-block w-0.5 h-4 bg-slate-400 ml-0.5 align-middle animate-pulse rounded" />
               )}
+            </div>
+          ) : (
+            <>
+              {content}
             </>
           )}
         </div>
