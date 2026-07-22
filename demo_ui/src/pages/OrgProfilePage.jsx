@@ -240,8 +240,8 @@ export default function OrgProfilePage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      {/* Completeness banner */}
-      {completeness && (
+      {/* Completeness banner — temporarily hidden */}
+      {false && completeness && (
         <div className="rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 text-white p-5">
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="md:w-32 flex-shrink-0">
@@ -278,7 +278,8 @@ export default function OrgProfilePage() {
 
       {/* Pill tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {[['info', 'Organisation Info'], ['clauses', 'Clause Fields']].map(([key, label]) => (
+        {/* Clause Fields tab — temporarily hidden */}
+        {[['info', 'Organisation Info']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}

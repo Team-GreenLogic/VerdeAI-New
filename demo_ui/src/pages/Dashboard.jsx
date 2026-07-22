@@ -160,16 +160,19 @@ export default function Dashboard() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <StatCard
-          icon={<ProfileIcon />}
-          label="Profile Completeness"
-          value={`${pct}%`}
-          sub="across all 32 clauses"
-          to="/org-profile"
-          color="violet"
-          delay={0}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {/* Profile Completeness stat — temporarily hidden */}
+        {false && (
+          <StatCard
+            icon={<ProfileIcon />}
+            label="Profile Completeness"
+            value={`${pct}%`}
+            sub="across all 32 clauses"
+            to="/org-profile"
+            color="violet"
+            delay={0}
+          />
+        )}
         <StatCard
           icon={<DocsIcon />}
           label="Documents Processed"
@@ -192,8 +195,8 @@ export default function Dashboard() {
 
       {/* Compliance Score + Latest Analysis */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Compliance Score Card */}
-        {completeness && (
+        {/* Compliance Score Card — temporarily hidden */}
+        {false && completeness && (
           <div className="rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/60 shadow-sm p-6 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
             <h3 className="text-sm font-semibold text-slate-700 mb-5">Compliance Overview</h3>
             <div className="flex items-center gap-6">
