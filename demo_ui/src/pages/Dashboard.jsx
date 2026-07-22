@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getCompleteness } from '../api/orgProfile.js'
-import { listAnalyses, createAnalysis } from '../api/analyses.js'
+import { listAnalyses, createAnalysis, getResults } from '../api/analyses.js'
 import { listDocuments } from '../api/documents.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
@@ -110,6 +110,7 @@ export default function Dashboard() {
   const [completeness, setCompleteness] = useState(null)
   const [analyses, setAnalyses] = useState([])
   const [docs, setDocs] = useState([])
+  const [latestResults, setLatestResults] = useState(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const navigate = useNavigate()
@@ -129,6 +130,16 @@ export default function Dashboard() {
   }, [])
 
   const latest = analyses[0] || null
+
+  // Fetch clause-level results for the latest completed analysis, to show
+  // a met/partially-met/not-met breakdown instead of just the gap count.
+  useEffect(() => {
+    if (latest?.status === 'complete') {
+      getResults(latest.analysis_id).then(setLatestResults).catch(() => setLatestResults(null))
+    } else {
+      setLatestResults(null)
+    }
+  }, [latest?.analysis_id, latest?.status])
   const activeStatuses = ['pending', 'running']
   const hasActive = analyses.some(a => activeStatuses.includes(a.status))
   const processedDocs = docs.filter(d => d.status === 'ready').length
@@ -232,7 +243,35 @@ export default function Dashboard() {
             <p className="text-xs text-slate-400 font-mono mb-3">
               {latest.analysis_id.slice(0, 12)}… · {new Date(latest.created_at).toLocaleString()}
             </p>
-            {latest.gap_count != null && (
+            {latestResults && latestResults.length > 0 ? (() => {
+              const total = latestResults.length
+              const counts = latestResults.reduce((acc, r) => { acc[r.decision] = (acc[r.decision] || 0) + 1; return acc }, {})
+              const met = counts['Met'] || 0
+              const partial = counts['Partially Met'] || 0
+              const notMet = counts['Not Met'] || 0
+              const other = total - met - partial - notMet
+              const pctOf = (n) => total ? (n / total) * 100 : 0
+              return (
+                <div className="mb-4">
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-3xl font-bold text-slate-900">{met}</span>
+                    <span className="text-sm text-slate-400">of {total} clauses met</span>
+                  </div>
+                  <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+                    {met > 0 && <div className="bg-emerald-500" style={{ width: `${pctOf(met)}%` }} />}
+                    {partial > 0 && <div className="bg-amber-400" style={{ width: `${pctOf(partial)}%` }} />}
+                    {notMet > 0 && <div className="bg-red-500" style={{ width: `${pctOf(notMet)}%` }} />}
+                    {other > 0 && <div className="bg-slate-300" style={{ width: `${pctOf(other)}%` }} />}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5 text-xs text-slate-500">
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />{met} Met</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" />{partial} Partially Met</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" />{notMet} Not Met</span>
+                    {other > 0 && <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-300" />{other} Other</span>}
+                  </div>
+                </div>
+              )
+            })() : latest.gap_count != null && (
               <p className="text-sm text-slate-600 mb-4">
                 <span className="text-3xl font-bold text-red-500">{latest.gap_count}</span>
                 <span className="ml-2 text-slate-400">gaps identified</span>
