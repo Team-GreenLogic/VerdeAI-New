@@ -39,6 +39,18 @@ _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=Fals
 _MAX_VERIFY_ATTEMPTS = 2
 _EXTRACT_CONCURRENCY = 4  # parallel clause extractions per batch
 
+# ISO management-system standards (14001, 9001, 45001, ...) share the fixed
+# "Harmonized Structure": clauses 1-3 (Scope, Normative references, Terms and
+# definitions) are always non-normative front matter with no "shall" requirements
+# to gap-check against. The LLM is asked to skip them but doesn't reliably comply
+# run-to-run, so it's enforced deterministically here instead of trusting the model.
+_NON_NORMATIVE_TOP_SECTIONS = {"0", "1", "2", "3"}
+
+
+def _is_normative(clause_id: str) -> bool:
+    top = clause_id.split(".", 1)[0].strip()
+    return top not in _NON_NORMATIVE_TOP_SECTIONS
+
 
 class BuildPaused(Exception):
     """Raised when the pipeline detects a pause signal and exits cleanly."""
@@ -226,7 +238,15 @@ async def _detect_structure_node(state: BuildState, config: RunnableConfig) -> d
     )
     content = resp.choices[0].message.content or "{}"
     parsed = json.loads(content)
-    outline: list[dict[str, Any]] = parsed.get("clauses", [])
+    raw_outline: list[dict[str, Any]] = parsed.get("clauses", [])
+
+    # Deterministically drop non-normative front matter (Scope, Normative
+    # references, Terms and definitions) regardless of what the LLM returned —
+    # see _NON_NORMATIVE_TOP_SECTIONS.
+    outline = [c for c in raw_outline if _is_normative(str(c.get("clause_id", "")))]
+    dropped = len(raw_outline) - len(outline)
+    if dropped:
+        logger.info("Dropped non-normative clauses from outline", version_id=version_id, dropped=dropped)
 
     await _emit_progress(tenant_id, build_job_id, "structure", f"Found {len(outline)} clauses in outline", redis_client)
     logger.info("Clause outline detected", version_id=version_id, count=len(outline))
@@ -274,7 +294,7 @@ async def _extract_clauses_node(state: BuildState, config: RunnableConfig) -> di
                 model=settings.CHEAP_REASONING_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=2048,
+                max_tokens=2560,
                 temperature=0.0,
                 name="iso_extract_clause",
             )
@@ -288,6 +308,7 @@ async def _extract_clauses_node(state: BuildState, config: RunnableConfig) -> di
                 "title": clause["title"],
                 "requirements": "",
                 "keywords": [],
+                "search_query": "",
             }
         return clause["clause_id"], result
 
@@ -400,6 +421,17 @@ async def _persist_node(state: BuildState, config: RunnableConfig) -> dict[str, 
     in_outline = set(ordered_ids)
     clauses += [v for k, v in extracted.items() if k not in in_outline]
 
+    # Drop clauses with no usable requirements text — nothing to gap-check a
+    # tenant's documents against, so persisting them is pure noise. Threshold
+    # matches the one used in _verify_coverage_node.
+    before = len(clauses)
+    clauses = [c for c in clauses if len(c.get("requirements", "")) >= 50]
+    if before != len(clauses):
+        logger.info(
+            "Dropped clauses with no extractable requirements",
+            version_id=version_id, dropped=before - len(clauses),
+        )
+
     await _emit_progress(tenant_id, build_job_id, "persist", f"Embedding {len(clauses)} clauses", redis_client)
 
     texts = [f"{c.get('title', '')}\n{c.get('requirements', '')}" for c in clauses]
@@ -417,6 +449,7 @@ async def _persist_node(state: BuildState, config: RunnableConfig) -> dict[str, 
             "title": clause.get("title", ""),
             "requirements": clause.get("requirements", ""),
             "keywords": clause.get("keywords", []),
+            "search_query": clause.get("search_query", ""),
             "embedding": emb,
         }
         await iso_repo.upsert(doc)

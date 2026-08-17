@@ -67,12 +67,14 @@ class ClauseCreate(BaseModel):
     title: str
     requirements: str
     keywords: list[str] = []
+    search_query: str = ""
 
 
 class ClauseUpdate(BaseModel):
     title: str | None = None
     requirements: str | None = None
     keywords: list[str] | None = None
+    search_query: str | None = None
 
 
 class ClauseDetail(BaseModel):
@@ -82,6 +84,7 @@ class ClauseDetail(BaseModel):
     title: str
     requirements: str
     keywords: list[str]
+    search_query: str = ""
 
 
 class TemplateFieldUpdate(BaseModel):
@@ -123,6 +126,7 @@ def _clause_to_detail(c: dict[str, Any]) -> ClauseDetail:
         title=c.get("title", ""),
         requirements=c.get("requirements", ""),
         keywords=c.get("keywords", []),
+        search_query=c.get("search_query", ""),
     )
 
 
@@ -235,7 +239,7 @@ async def list_clauses(version_id: str, principal: CurrentAdmin) -> list[ClauseD
     db = get_database()
     await _assert_version_exists(db, version_id)
     clauses = await ISOClausesRepository(db).list_all(version_id=version_id)
-    clauses.sort(key=lambda c: (c.get("section", 0), c.get("clause_id", "")))
+    clauses.sort(key=lambda c: (str(c.get("section", "")), c.get("clause_id", "")))
     return [_clause_to_detail(c) for c in clauses]
 
 
@@ -271,6 +275,7 @@ async def create_clause(version_id: str, body: ClauseCreate, principal: CurrentA
         "title": body.title,
         "requirements": body.requirements,
         "keywords": body.keywords,
+        "search_query": body.search_query,
         "embedding": embeddings[0],
     }
     await repo.upsert(doc)
@@ -300,6 +305,8 @@ async def update_clause(version_id: str, clause_id: str, body: ClauseUpdate, pri
         updates["requirements"] = body.requirements
     if body.keywords is not None:
         updates["keywords"] = body.keywords
+    if body.search_query is not None:
+        updates["search_query"] = body.search_query
 
     # Re-embed if title or requirements changed
     if "title" in updates or "requirements" in updates:
@@ -424,6 +431,11 @@ async def trigger_build(version_id: str, principal: CurrentAdmin) -> BuildRespon
 
     build_job_id = str(uuid.uuid4())
     repo = ISOVersionsRepository(db)
+    # A fresh build fully re-detects the clause outline (non-deterministic across
+    # runs), so stale clauses/template fields from any previous run must be purged
+    # first — otherwise old and new clause IDs pile up side by side.
+    await ISOClausesRepository(db).delete_for_version(version_id)
+    await ISOStateRepository(db).delete_for_version(version_id)
     await repo.set_build_job(version_id, build_job_id)
     await repo.set_build_status(version_id, "building")
     await repo.update_status(version_id, "draft", extra={"source": "ai", "build_error": None})

@@ -32,6 +32,7 @@ function ClauseEditor({ vid, clause, onSaved, onCancel }) {
     section: clause?.section ?? '',
     title: clause?.title ?? '',
     requirements: clause?.requirements ?? '',
+    search_query: clause?.search_query ?? '',
     keywords: clause?.keywords?.join(', ') ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -98,6 +99,17 @@ function ClauseEditor({ vid, clause, onSaved, onCancel }) {
           placeholder="Normative requirements text..."
           value={form.requirements}
           onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1">Search Query</label>
+        <p className="text-[11px] text-slate-400 mb-1">Used to search the tenant's uploaded documents for evidence — phrase it like a search, not the clause text.</p>
+        <textarea
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+          rows={2}
+          placeholder="environmental policy document, legal register, compliance procedure..."
+          value={form.search_query}
+          onChange={e => setForm(f => ({ ...f, search_query: e.target.value }))}
         />
       </div>
       <div>
@@ -202,6 +214,9 @@ function ClausesTab({ vid, version }) {
                       </div>
                       {c.requirements && (
                         <p className="text-xs text-slate-500 line-clamp-2 mt-1">{c.requirements}</p>
+                      )}
+                      {c.search_query && (
+                        <p className="text-[11px] text-amber-600 italic line-clamp-1 mt-1">🔍 {c.search_query}</p>
                       )}
                       {c.keywords?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">

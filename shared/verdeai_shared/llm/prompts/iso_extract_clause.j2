@@ -8,6 +8,7 @@ Clause to extract:
 Your task is to extract:
 1. requirements: The COMPLETE normative text for this clause. Include ALL "shall" statements and requirements. Do not summarize or paraphrase — extract verbatim or near-verbatim. If the clause has sub-clauses, include all of them in a coherent paragraph.
 2. keywords: 5-10 key technical terms from this clause's requirements (single words or short phrases relevant for search).
+3. search_query: A short retrieval-optimized phrase (1-2 sentences) for semantic search against a company's uploaded documents to find evidence of conformance. Use concrete artifact names an organization might have on file (e.g. "environmental policy document", "legal register", "risk assessment procedure", "training records") and domain synonyms — not the legal "shall" phrasing itself.
 
 Output ONLY valid JSON in this exact format:
 {
@@ -15,13 +16,15 @@ Output ONLY valid JSON in this exact format:
   "section": {{ section }},
   "title": "{{ title }}",
   "requirements": "The full normative requirements text here...",
-  "keywords": ["keyword1", "keyword2", "keyword3"]
+  "keywords": ["keyword1", "keyword2", "keyword3"],
+  "search_query": "A retrieval-optimized query describing what evidence to look for..."
 }
 
 Rules:
 - requirements must be comprehensive — missing requirements is unacceptable
 - keywords should be specific technical terms, not generic words like "shall" or "organization"
-- If the clause is not found in the document, still return the JSON but set requirements to an empty string and keywords to []
+- search_query should read like something you'd type into a search box, not a restatement of the clause text
+- If the clause is not found in the document, still return the JSON but set requirements to an empty string, keywords to [], and search_query to an empty string
 
 Document text:
 {{ document_text }}
