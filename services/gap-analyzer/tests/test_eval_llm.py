@@ -4,32 +4,7 @@ import pytest
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
 
-FAITHFULNESS_PROMPT = """
-You are an expert AI evaluator.
-You will be provided with a SOURCE DOCUMENT and a GENERATED ANALYSIS.
-Your task is to determine if the GENERATED ANALYSIS is faithful to the SOURCE DOCUMENT.
-Faithful means all claims, facts, and gaps in the GENERATED ANALYSIS are supported by the SOURCE DOCUMENT.
-If there is a hallucination or an unsupported claim, output FAITHFUL: False. Otherwise, output FAITHFUL: True.
-
-Return your answer strictly in the following JSON format:
-{
-    "faithful": boolean,
-    "reason": "short explanation of why"
-}
-"""
-
-COMPLETENESS_PROMPT = """
-You are an expert AI evaluator.
-You will be provided with a REQUIREMENT STANDARD and a GENERATED ANALYSIS.
-Your task is to determine if the GENERATED ANALYSIS addresses all parts of the REQUIREMENT STANDARD.
-If the analysis misses any key part of the standard, output COMPLETE: False. Otherwise, output COMPLETE: True.
-
-Return your answer strictly in the following JSON format:
-{
-    "complete": boolean,
-    "reason": "short explanation of why"
-}
-"""
+from tests.eval.faithfulness import COMPLETENESS_PROMPT, FAITHFULNESS_PROMPT
 
 @pytest.mark.asyncio
 async def test_llm_judge_catches_hallucination():

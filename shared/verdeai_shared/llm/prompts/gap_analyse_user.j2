@@ -17,8 +17,16 @@ Required output schema:
   "decision": "Met|Partially Met|Not Met|Insufficient Evidence",
   "confidence": <0.0-1.0>,
   "reasoning": "<explicit chain-of-evidence referencing field_paths and Chunk N positions>",
+  "findings": [
+    {
+      "req_id": "<field_path from the assertion-level state comparison>",
+      "status": "satisfied|partial|unmet",
+      "citation_ids": [<1-based Chunk numbers grounding this finding>],
+      "notes": "<one sentence justifying this finding>"
+    }
+  ],
   "citations": [
-    {"type": "chunk", "chunk_id": "<id>", "page": <number>} |
+    {"type": "chunk", "chunk_id": "Chunk <N>", "page": <number>} |
     {"type": "org_profile", "field_path": "<path>"}
   ],
   "missing_evidence": ["<specific document type or named data point needed>"]

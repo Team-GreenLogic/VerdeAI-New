@@ -19,6 +19,7 @@ from verdeai_shared.db.mongo import get_database
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
+from verdeai_shared.iso.state_template import STANDARD_STATE_FIELDS
 from verdeai_shared.retrieval.embedder import embed_documents
 from verdeai_shared.settings import settings
 
@@ -483,11 +484,7 @@ CLAUSES: list[dict[str, Any]] = [
 # State template fields per clause
 # ---------------------------------------------------------------------------
 
-_STATE_FIELDS = [
-    {"suffix": "gap_identified", "label": "Gap identified", "field_type": "boolean", "default": False},
-    {"suffix": "conformance_score", "label": "Conformance score (0–1)", "field_type": "float", "default": 0.0},
-    {"suffix": "evidence_notes", "label": "Evidence notes", "field_type": "string", "default": ""},
-]
+_STATE_FIELDS = STANDARD_STATE_FIELDS
 
 
 # ---------------------------------------------------------------------------

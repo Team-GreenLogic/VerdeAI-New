@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from loguru import logger
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOV
 from verdeai_shared.messaging.events import AnalysisRequested
 
 from app.services.analysis_publisher import publish_analysis_requested
+from app.services.report_builder import build_report_context, render_report_pdf
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -295,6 +296,38 @@ async def get_analysis_results(
         )
         for r in rows
     ]
+
+
+@router.get("/{analysis_id}/report.pdf")
+async def download_report(
+    analysis_id: str,
+    principal: CurrentPrincipal,
+) -> Response:
+    """Generate and download a print-ready PDF compliance report for a completed analysis."""
+    tenant_id = principal.tenant_id
+    db = get_database()
+
+    doc = await _get_owned(db, analysis_id, tenant_id)
+    if doc.get("status") != "complete":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Report is only available once the analysis is complete "
+                   f"(current status: '{doc.get('status', 'unknown')}').",
+        )
+
+    try:
+        context = await build_report_context(db, tenant_id, doc)
+        pdf_bytes = render_report_pdf(context)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to generate compliance report", analysis_id=analysis_id, error=str(exc))
+        raise HTTPException(status_code=500, detail="Failed to generate compliance report")
+
+    filename = f"compliance-report-{analysis_id[:8]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{analysis_id}/recommendations", response_model=list[RecommendationItem])

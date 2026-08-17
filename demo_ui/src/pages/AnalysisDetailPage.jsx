@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   getAnalysis, pauseAnalysis, resumeAnalysis,
-  getResults, getRecommendations, getMissingRequirements,
+  getResults, getRecommendations, getMissingRequirements, downloadReport,
 } from '../api/analyses.js'
 import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
@@ -36,6 +36,50 @@ const XCircle = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 )
+const CloseSVG = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+)
+
+// ── Citation Modal ────────────────────────────────────────────────────────────
+function CitationModal({ citation, onClose }) {
+  if (!citation) return null
+  const title = citation.type === 'org_profile'
+    ? (citation.field_path || 'Organisation Profile')
+    : (citation.filename || 'Document Reference')
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col animate-fade-in-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-800 text-sm truncate">{title}</p>
+            {citation.type !== 'org_profile' && citation.page != null && (
+              <p className="text-xs text-slate-500 mt-0.5">Page {citation.page}</p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors flex-shrink-0"
+          >
+            <CloseSVG />
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            {citation.text || 'No excerpt available.'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
 function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
@@ -193,6 +237,7 @@ function GapResultsTab({ analysisId, version }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+  const [activeCitation, setActiveCitation] = useState(null)
 
   useEffect(() => {
     getResults(analysisId).then(r => { setResults((r || []).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id))); setLoading(false) })
@@ -268,9 +313,15 @@ function GapResultsTab({ analysisId, version }) {
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Citations</p>
                     <div className="flex flex-wrap gap-2">
                       {r.citations.map((c, i) => (
-                        <span key={i} className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-500">
-                          {c.filename || c.chunk_id} p.{c.page}
-                        </span>
+                        <button
+                          key={i}
+                          onClick={() => setActiveCitation(c)}
+                          className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-500 hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors cursor-pointer"
+                        >
+                          {c.type === 'org_profile'
+                            ? c.field_path
+                            : `${c.filename || c.chunk_id}${c.page != null ? ` p.${c.page}` : ''}`}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -280,6 +331,8 @@ function GapResultsTab({ analysisId, version }) {
           </div>
         ))}
       </div>
+
+      <CitationModal citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   )
 }
@@ -395,6 +448,7 @@ export default function AnalysisDetailPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('results')
   const [actioning, setActioning] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [resultVersion, setResultVersion] = useState(0)
 
   async function refresh() {
@@ -443,6 +497,22 @@ export default function AnalysisDetailPage() {
     setActioning(false)
   }
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const blob = await downloadReport(id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `compliance-report-${id.slice(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) { alert(err.message) }
+    setExporting(false)
+  }
+
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
   if (!analysis) return <p className="text-center text-slate-400 py-20">Analysis not found.</p>
 
@@ -466,6 +536,18 @@ export default function AnalysisDetailPage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Badge status={analysis.status} />
+            {analysis.status === 'complete' && (
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 transition-colors"
+              >
+                {exporting
+                  ? <Spinner size="sm" />
+                  : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m-9 7h12a2 2 0 002-2V7a2 2 0 00-2-2h-5.586a1 1 0 01-.707-.293l-1.414-1.414A1 1 0 009.586 3H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                {exporting ? 'Generating…' : 'Export PDF'}
+              </button>
+            )}
             {analysis.gap_count != null && (
               <span className={`text-sm font-bold rounded-full px-3 py-0.5 ${
                 analysis.gap_count > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'

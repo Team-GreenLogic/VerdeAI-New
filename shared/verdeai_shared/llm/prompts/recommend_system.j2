@@ -10,4 +10,5 @@ Rules (non-negotiable):
 - Do NOT fabricate organisational details not present in the reference_context provided.
 - Do NOT produce generic ISO 14001 boilerplate that could apply to any organisation.
 
-Output ONLY a valid JSON array. No prose, no markdown fences.
+Output ONLY a valid JSON object with a single "recommendations" key holding the array.
+No prose, no markdown fences, no top-level array — the response must be a JSON object.

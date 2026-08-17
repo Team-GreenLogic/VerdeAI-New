@@ -18,7 +18,8 @@ from verdeai_shared.pipeline.recommendations import generate_recommendations
 from app.pipeline.analyse_clause import AnalysisPaused, analyse_clause
 from app.progress import emit
 
-_GAP_DECISIONS = ("Met", "Insufficient Evidence")
+_RECOMMENDATION_SKIP_DECISIONS = ("Met", "Insufficient Evidence")
+_MISSING_REQUEST_SKIP_DECISIONS = ("Met",)
 
 
 async def handle_analysis_requested(message: IncomingMessage) -> None:
@@ -165,14 +166,18 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                     redis_client=redis,
                 )
 
-                # Generate recommendations + missing requests immediately for gap clauses
-                if decision not in _GAP_DECISIONS:
+                # Generate recommendations + missing requests immediately for gap clauses.
+                # Recommendations need a diagnosed gap (skipped for Insufficient Evidence);
+                # missing-requirement drafts are exactly what Insufficient Evidence calls for,
+                # so only "Met" skips those.
+                if decision not in _RECOMMENDATION_SKIP_DECISIONS:
                     try:
-                        await generate_recommendations(db, tenant_id, analysis_id, result)
+                        await generate_recommendations(db, tenant_id, analysis_id, result, version_id=version_id)
                     except Exception as exc:
                         logger.warning("Recommendation generation failed", clause_id=clause_id, error=str(exc))
+                if decision not in _MISSING_REQUEST_SKIP_DECISIONS:
                     try:
-                        await generate_missing_requests(db, tenant_id, analysis_id, result)
+                        await generate_missing_requests(db, tenant_id, analysis_id, result, version_id=version_id)
                     except Exception as exc:
                         logger.warning("Missing-requests generation failed", clause_id=clause_id, error=str(exc))
 

@@ -40,6 +40,28 @@ export async function apiGet(path, { chat = false } = {}) {
   return handleResponse(res)
 }
 
+export async function apiGetBlob(path, { chat = false } = {}) {
+  const base = chat ? CHAT_URL : API_URL
+  const res = await fetch(`${base}${path}`, {
+    headers: authHeaders(),
+  })
+  if (res.status === 401) {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const body = await res.json()
+      detail = body.detail || detail
+    } catch (_) {}
+    throw new Error(detail)
+  }
+  return res.blob()
+}
+
 export async function apiPost(path, body = null, { chat = false } = {}) {
   const base = chat ? CHAT_URL : API_URL
   const res = await fetch(`${base}${path}`, {

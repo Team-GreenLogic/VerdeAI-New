@@ -71,7 +71,10 @@ async def hybrid_retrieve(
         return []
 
     reranked = await rerank(query, texts, top_k=settings.RERANK_TOP_K)
-    return [fused[r["index"]] for r in reranked]
+    # Surface the rerank relevance score onto each chunk (previously discarded) so
+    # downstream evidence-grading can drop marginal/irrelevant chunks instead of
+    # always handing the LLM a fixed top-N regardless of quality.
+    return [{**fused[r["index"]], "rerank_score": r["score"]} for r in reranked]
 
 
 async def _run_both(
