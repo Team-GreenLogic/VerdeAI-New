@@ -13,11 +13,13 @@ giving the frontend step-by-step visibility within a clause.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypedDict
 
 import verdeai_shared as _vs_pkg
+from bson import ObjectId
 from jinja2 import Environment, FileSystemLoader
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
@@ -99,9 +101,56 @@ def _format_chunks(chunks: list[dict[str, Any]]) -> str:
     parts = []
     for i, c in enumerate(chunks, 1):
         page = c.get("page", "?")
+        filename = c.get("filename", "unknown")
         text = c.get("text", "")
-        parts.append(f"[Chunk {i} | Page {page}]\n{text}")
+        parts.append(f"[Chunk {i} | {filename}, p.{page}]\n{text}")
     return "\n\n---\n\n".join(parts)
+
+
+async def _enrich_chunks_with_filenames(
+    db: Any, tenant_id: str, chunks: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Attach filenames to retrieved chunks — chunks only store document_id."""
+    doc_ids = [c.get("document_id") for c in chunks if c.get("document_id")]
+    if not doc_ids:
+        return chunks
+
+    try:
+        object_ids = [ObjectId(d) for d in doc_ids]
+    except Exception:
+        return chunks
+
+    cursor = db.documents.find(
+        {"tenant_id": tenant_id, "_id": {"$in": object_ids}},
+        {"_id": 1, "filename": 1},
+    )
+    docs = await cursor.to_list(length=None)
+    id_to_filename = {str(d["_id"]): d.get("filename", "unknown") for d in docs}
+
+    return [{**c, "filename": id_to_filename.get(str(c.get("document_id", "")), "unknown")} for c in chunks]
+
+
+def _enrich_citations(
+    chunks: list[dict[str, Any]], org_profile_map: dict[str, Any], citations: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Attach the actual excerpt text to LLM-produced citations so the frontend
+    can show the source content on click, instead of just a chunk position/page.
+    """
+    enriched: list[dict[str, Any]] = []
+    for citation in citations:
+        c = dict(citation)
+        if c.get("type") == "chunk":
+            match = re.search(r"\d+", str(c.get("chunk_id", "")))
+            idx = int(match.group()) - 1 if match else -1
+            if 0 <= idx < len(chunks):
+                chunk = chunks[idx]
+                c["filename"] = chunk.get("filename", "unknown")
+                c["page"] = chunk.get("page", c.get("page"))
+                c["text"] = chunk.get("text", "")
+        elif c.get("type") == "org_profile":
+            c["text"] = str(org_profile_map.get(c.get("field_path", ""), ""))
+        enriched.append(c)
+    return enriched
 
 
 async def _emit_step(step_name: str, config: RunnableConfig) -> None:
@@ -146,6 +195,8 @@ async def _retrieve_node(state: ClauseState, config: RunnableConfig) -> dict[str
     # Let exceptions propagate so the actor can distinguish a retrieval failure
     # from a genuine "no documents in the knowledge base" result.
     chunks = await hybrid_retrieve(cfg["db"], cfg["tenant_id"], query_text, state["query_vector"])
+    if chunks:
+        chunks = await _enrich_chunks_with_filenames(cfg["db"], cfg["tenant_id"], chunks)
     evidence_text = _format_chunks(chunks) if chunks else ""
     return {"chunks": chunks, "evidence_text": evidence_text}
 
@@ -270,6 +321,13 @@ async def _persist_node(state: ClauseState, config: RunnableConfig) -> dict[str,
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
     clause_id: str = state["clause"]["clause_id"]
     gap_result = state.get("gap_result", dict(_INSUFFICIENT))
+    if gap_result.get("citations"):
+        gap_result = {
+            **gap_result,
+            "citations": _enrich_citations(
+                state.get("chunks", []), state.get("org_profile_map", {}), gap_result["citations"]
+            ),
+        }
     await ResultStoreRepository(cfg["db"], cfg["tenant_id"]).upsert(
         cfg["analysis_id"], clause_id, gap_result
     )

@@ -36,6 +36,50 @@ const XCircle = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 )
+const CloseSVG = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+)
+
+// ── Citation Modal ────────────────────────────────────────────────────────────
+function CitationModal({ citation, onClose }) {
+  if (!citation) return null
+  const title = citation.type === 'org_profile'
+    ? (citation.field_path || 'Organisation Profile')
+    : (citation.filename || 'Document Reference')
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col animate-fade-in-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-800 text-sm truncate">{title}</p>
+            {citation.type !== 'org_profile' && citation.page != null && (
+              <p className="text-xs text-slate-500 mt-0.5">Page {citation.page}</p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors flex-shrink-0"
+          >
+            <CloseSVG />
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            {citation.text || 'No excerpt available.'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Live Progress Panel ──────────────────────────────────────────────────────
 function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0, onClauseComplete, onAnalysisDone }) {
@@ -193,6 +237,7 @@ function GapResultsTab({ analysisId, version }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+  const [activeCitation, setActiveCitation] = useState(null)
 
   useEffect(() => {
     getResults(analysisId).then(r => { setResults((r || []).sort((a, b) => compareClauseIds(a.clause_id, b.clause_id))); setLoading(false) })
@@ -268,9 +313,15 @@ function GapResultsTab({ analysisId, version }) {
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Citations</p>
                     <div className="flex flex-wrap gap-2">
                       {r.citations.map((c, i) => (
-                        <span key={i} className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-500">
-                          {c.filename || c.chunk_id} p.{c.page}
-                        </span>
+                        <button
+                          key={i}
+                          onClick={() => setActiveCitation(c)}
+                          className="text-xs bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-500 hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors cursor-pointer"
+                        >
+                          {c.type === 'org_profile'
+                            ? c.field_path
+                            : `${c.filename || c.chunk_id}${c.page != null ? ` p.${c.page}` : ''}`}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -280,6 +331,8 @@ function GapResultsTab({ analysisId, version }) {
           </div>
         ))}
       </div>
+
+      <CitationModal citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   )
 }
