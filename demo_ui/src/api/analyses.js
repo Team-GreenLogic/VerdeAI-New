@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './client.js'
+import { apiGet, apiPost, apiGetBlob } from './client.js'
 
 export async function getVersions() {
   return apiGet('/analyses/versions')
@@ -34,4 +34,8 @@ export async function getRecommendations(id) {
 
 export async function getMissingRequirements(id) {
   return apiGet(`/analyses/${id}/missing-requirements`)
+}
+
+export async function downloadReport(id) {
+  return apiGetBlob(`/analyses/${id}/report.pdf`)
 }

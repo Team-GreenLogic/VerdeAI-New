@@ -1,0 +1,51 @@
+verdeai-phase-0-bootstrap
+
+claude --resume "verdeai-phase-0-bootstrap"
+
+mongodb://localhost:27017
+
+
+sudo docker compose logs -f document-processor
+
+---
+
+To avoid mongodb startup failiure, always use: 
+
+sudo docker compose stop
+
+and
+
+sudo docker compose start
+
+instead up or down
+
+---
+
+sudo docker compose logs -f gap-analyzer
+
+---
+
+mongodb://localhost:27017/?directConnection=true
+
+---
+
+docker compose build gap-analyzer && docker compose up -d gap-analyzer
+
+---
+
+user3@example.com
+abc12345
+
+---
+
+● Now restart just the Langfuse container:                                                                          11% until auto-c      
+                                                                                                                                            
+  sudo docker compose up -d langfuse          
+                                          
+  Then open http://localhost:3000 and log in with:
+  - Email: admin@verdeai.local                                                                                                              
+  - Password: admin123
+
+---
+
+bash migrate_models_to_langfuse.sh
