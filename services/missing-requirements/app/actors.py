@@ -5,13 +5,16 @@ from aio_pika import IncomingMessage
 from loguru import logger
 
 from verdeai_shared.db.mongo import get_database
+from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 from verdeai_shared.db.repositories.result_store import ResultStoreRepository
 from verdeai_shared.messaging.connection import get_channel
 from verdeai_shared.messaging.events import AnalysisGapsReady, AnalysisMissingReady
 
 from app.pipeline.generate_missing import generate_missing_requests
 
-_GAP_DECISIONS = ("Met", "Insufficient Evidence")
+# Unlike recommendations, a missing-requirement draft ("please provide X") is exactly what an
+# Insufficient Evidence clause needs — only "Met" clauses have nothing to request.
+_SKIP_DECISIONS = ("Met",)
 
 
 async def handle_analysis_gaps_ready(message: IncomingMessage) -> None:
@@ -36,9 +39,14 @@ async def handle_analysis_gaps_ready(message: IncomingMessage) -> None:
 
     db = get_database()
 
+    # AnalysisGapsReady doesn't carry version_id — look it up once so clause/state-template
+    # lookups inside generate_missing_requests hit the correct (possibly custom-built) ISO version.
+    analysis_doc = await db.analyses.find_one({"analysis_id": analysis_id}, {"version_id": 1})
+    version_id = analysis_doc.get("version_id", DEFAULT_VERSION_ID) if analysis_doc else DEFAULT_VERSION_ID
+
     # Load all gap results and filter to actionable clauses
     all_results = await ResultStoreRepository(db, tenant_id).list_for_analysis(analysis_id)
-    gap_results = [r for r in all_results if r.get("decision") not in _GAP_DECISIONS]
+    gap_results = [r for r in all_results if r.get("decision") not in _SKIP_DECISIONS]
 
     if not gap_results:
         logger.info("No gap clauses to generate requests for", analysis_id=analysis_id)
@@ -52,7 +60,7 @@ async def handle_analysis_gaps_ready(message: IncomingMessage) -> None:
     for i, gap_result in enumerate(gap_results, 1):
         clause_id = gap_result.get("clause_id", "?")
         try:
-            await generate_missing_requests(db, tenant_id, analysis_id, gap_result)
+            await generate_missing_requests(db, tenant_id, analysis_id, gap_result, version_id=version_id)
             logger.info(
                 "Missing requests generated",
                 clause_id=clause_id,

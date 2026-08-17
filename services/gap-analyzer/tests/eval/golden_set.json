@@ -1,0 +1,15 @@
+{
+  "_comment": "Replace these with REAL expected decisions for a fixture tenant with known, hand-reviewed documents uploaded. Run a completed analysis for that tenant against version_id below, then: python -m tests.eval.run_gap_eval --tenant <fixture-tenant> --analysis-id <id>",
+  "version_id": "iso-14001-2015",
+  "labels": [
+    {"clause_id": "4.1", "expected_decision": "Met", "notes": "Fixture org profile documents context analysis"},
+    {"clause_id": "4.2", "expected_decision": "Met", "notes": "Interested parties register present"},
+    {"clause_id": "4.3", "expected_decision": "Partially Met", "notes": "Scope documented but boundaries incomplete"},
+    {"clause_id": "5.1", "expected_decision": "Met", "notes": "Leadership commitment documented in policy"},
+    {"clause_id": "5.2", "expected_decision": "Met", "notes": "Environmental policy uploaded"},
+    {"clause_id": "6.1.2", "expected_decision": "Not Met", "notes": "No environmental aspects register in fixture corpus"},
+    {"clause_id": "7.2", "expected_decision": "Partially Met", "notes": "Training records exist but incomplete"},
+    {"clause_id": "9.2.1", "expected_decision": "Not Met", "notes": "No internal audit records in fixture corpus"},
+    {"clause_id": "10.2", "expected_decision": "Insufficient Evidence", "notes": "No nonconformity records uploaded at all"}
+  ]
+}

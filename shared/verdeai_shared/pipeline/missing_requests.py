@@ -11,6 +11,7 @@ from loguru import logger
 
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
+from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 from verdeai_shared.db.repositories.missing_request_store import MissingRequestStoreRepository
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
@@ -34,6 +35,7 @@ async def generate_missing_requests(
     tenant_id: str,
     analysis_id: str,
     gap_result: dict[str, Any],
+    version_id: str = DEFAULT_VERSION_ID,
 ) -> None:
     """Draft information-request messages for each missing state field and persist them.
 
@@ -50,15 +52,15 @@ async def generate_missing_requests(
         return
 
     # Load clause details for title
-    clause = await ISOClausesRepository(db).get(clause_id)
+    clause = await ISOClausesRepository(db).get(clause_id, version_id=version_id)
     clause_title = clause.get("title", clause_id) if clause else clause_id
 
     # Load state template fields (cap to avoid excessive LLM calls)
-    state_entries = await ISOStateRepository(db).list_for_clause(clause_id)
+    state_entries = await ISOStateRepository(db).list_for_clause(clause_id, version_id=version_id)
     fields = state_entries[:_MAX_FIELDS_PER_CLAUSE]
 
     if not fields:
-        logger.info("No state fields found for clause", clause_id=clause_id)
+        logger.info("No state fields found for clause", clause_id=clause_id, version_id=version_id)
         return
 
     items: list[dict[str, Any]] = []

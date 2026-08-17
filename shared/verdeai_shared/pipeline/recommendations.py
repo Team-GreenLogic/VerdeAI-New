@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
+from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 from verdeai_shared.db.repositories.recommendation_store import RecommendationStoreRepository
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
@@ -33,6 +34,7 @@ async def generate_recommendations(
     tenant_id: str,
     analysis_id: str,
     gap_result: dict[str, Any],
+    version_id: str = DEFAULT_VERSION_ID,
 ) -> None:
     """Generate 2-4 recommendations for a gap clause and persist them.
 
@@ -60,7 +62,7 @@ async def generate_recommendations(
         return
 
     # Load clause details for title
-    clause = await ISOClausesRepository(db).get(clause_id)
+    clause = await ISOClausesRepository(db).get(clause_id, version_id=version_id)
     clause_title = clause.get("title", clause_id) if clause else clause_id
 
     # Load org_profile entries for this clause
@@ -81,6 +83,7 @@ async def generate_recommendations(
         actionable_seeds_json="[]",
     )
 
+    content: str = ""
     try:
         resp = await complete(
             model=settings.PRIMARY_REASONING_MODEL,
@@ -93,14 +96,24 @@ async def generate_recommendations(
             response_format={"type": "json_object"},
             name="recommendation",
         )
-        raw = json.loads(resp.choices[0].message.content)
-        # LLM may return {"recommendations": [...]} or directly [...]
+        content = resp.choices[0].message.content or ""
+        raw = json.loads(content)
+        # Prompt asks for {"recommendations": [...]} to match response_format=json_object
+        # (a bare JSON array is invalid under that mode); keep the list fallback defensively
+        # in case a model ignores the object-wrapping instruction.
         if isinstance(raw, list):
             recs = raw
+        elif isinstance(raw, dict):
+            recs = raw.get("recommendations", [])
         else:
-            recs = raw.get("recommendations", list(raw.values())[0] if raw else [])
+            recs = []
     except Exception as exc:
-        logger.warning("Recommendation LLM call failed", clause_id=clause_id, error=str(exc))
+        logger.warning(
+            "Recommendation LLM call failed",
+            clause_id=clause_id,
+            error=str(exc),
+            raw_response=content[:300],
+        )
         return
 
     tagged = [{**r, "clause_id": clause_id} for r in recs if isinstance(r, dict)]

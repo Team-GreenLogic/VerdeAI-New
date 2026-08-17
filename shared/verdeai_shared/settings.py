@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     CHUNK_TARGET_TOKENS: int = 512
     CHUNK_OVERLAP_TOKENS: int = 64
 
+    # --- Gap-analysis validation (evidence grading / groundedness verification) ---
+    RERANK_SCORE_THRESHOLD: float = 0.3   # chunks below this rerank score are dropped before analysis
+    MIN_RELEVANT_CHUNKS: int = 2          # below this, a clause is routed to Insufficient Evidence
+    MAX_VERIFY_RETRIES: int = 2           # bounded repair loop when a verdict fails grounding checks
+    EVIDENCE_GRADER_ENABLED: bool = True  # toggle the LLM relevance-grading pass (CRAG-style)
+    GRADER_MODEL: str = ""                # blank -> falls back to CHEAP_REASONING_MODEL
+
     def admin_email_set(self) -> set[str]:
         """Return the set of lowercase admin emails from the env var."""
         return {e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()}
