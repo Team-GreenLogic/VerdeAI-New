@@ -84,6 +84,7 @@ class ClauseState(TypedDict, total=False):
     """
 
     clause: dict[str, Any]
+    query_text: str
     query_vector: list[float]
     chunks: list[dict[str, Any]]
     evidence_text: str
@@ -94,6 +95,16 @@ class ClauseState(TypedDict, total=False):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _build_query_text(clause: dict[str, Any]) -> str:
+    """Prefer the LLM-generated retrieval query (phrased for semantic search over
+    company documents); fall back to title+requirements for clauses extracted
+    before this field existed (e.g. hardcoded seed clauses)."""
+    search_query = clause.get("search_query") or ""
+    if search_query:
+        return search_query
+    return f"{clause.get('title', clause.get('clause_id', ''))}\n{clause.get('requirements', '')}"
+
 
 def _format_chunks(chunks: list[dict[str, Any]]) -> str:
     parts = []
@@ -128,21 +139,18 @@ async def _emit_step(step_name: str, config: RunnableConfig) -> None:
 async def _embed_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("embed", config)
     clause = state["clause"]
-    clause_id: str = clause["clause_id"]
-    query_text = f"{clause.get('title', clause_id)}\n{clause.get('requirements', '')}"
+    query_text = _build_query_text(clause)
     # Let exceptions propagate — the actor catches them and records a proper Error
     # decision rather than silently cascading Insufficient Evidence to all remaining clauses.
     vector: list[float] = await embed_query(query_text)
-    return {"query_vector": vector}
+    return {"query_vector": vector, "query_text": query_text}
 
 
 @observe(as_type="span")  # type: ignore[misc]
 async def _retrieve_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("retrieve", config)
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
-    clause = state["clause"]
-    clause_id: str = clause["clause_id"]
-    query_text = f"{clause.get('title', clause_id)}\n{clause.get('requirements', '')}"
+    query_text = state["query_text"]
     # Let exceptions propagate so the actor can distinguish a retrieval failure
     # from a genuine "no documents in the knowledge base" result.
     chunks = await hybrid_retrieve(cfg["db"], cfg["tenant_id"], query_text, state["query_vector"])

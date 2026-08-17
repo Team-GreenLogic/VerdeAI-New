@@ -82,7 +82,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
-    ports: ["5672:5672", "15672:15672"]
+    ports: ["5673:5672", "15672:15672"]
     volumes:
       - rmq-data:/var/lib/rabbitmq
       - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
