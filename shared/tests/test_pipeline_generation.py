@@ -86,12 +86,14 @@ class _FakeDB:
 
 
 ISO_CLAUSES_DOCS = [{"version_id": CUSTOM_VERSION, "clause_id": "6.1.2", "title": "Environmental aspects"}]
+# Distinct label (not "Gap identified", the synthesized fallback's label) so tests can prove
+# DB-backed data took priority over the synthesized fallback, not just that *something* matched.
 ISO_STATE_DOCS = [
     {
         "version_id": CUSTOM_VERSION,
         "clause_id": "6.1.2",
         "field_path": "6.1.2.gap_identified",
-        "label": "Gap identified",
+        "label": "DB-curated gap flag",
         "field_type": "boolean",
         "default": False,
     },
@@ -105,7 +107,7 @@ def _completion(content: str) -> SimpleNamespace:
 # ── generate_missing_requests ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_missing_requests_uses_the_passed_version_id(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_missing_requests_prefers_db_backed_fields_when_present(monkeypatch: pytest.MonkeyPatch) -> None:
     db = _FakeDB(ISO_CLAUSES_DOCS, ISO_STATE_DOCS)
     calls: list[dict[str, Any]] = []
 
@@ -116,30 +118,65 @@ async def test_missing_requests_uses_the_passed_version_id(monkeypatch: pytest.M
     monkeypatch.setattr(missing_requests_module, "complete", fake_complete)
 
     gap_result = {"clause_id": "6.1.2"}
-    await generate_missing_requests(db, "tenant-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
+    count = await generate_missing_requests(db, "tenant-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
 
+    assert count == 1
     assert len(calls) == 1
     assert len(db.missing_request_store.inserted) == 1
     assert db.missing_request_store.inserted[0]["field_path"] == "6.1.2.gap_identified"
 
 
 @pytest.mark.asyncio
-async def test_missing_requests_default_version_id_finds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression test for the actual bug: data lives under a custom version_id,
-    but the function is called without one (as it was before the fix) — it must
-    silently no-op rather than crash, reproducing the "No state fields found" path.
+async def test_missing_requests_falls_back_to_synthesized_fields_when_db_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for the actual production bug: this custom ISO version's
+    iso_state_template collection has zero rows for any clause (confirmed via the
+    "No state fields found for clause" log line firing for every clause in the run).
+    Previously this meant a permanent, silent no-op. It must now fall back to the
+    standard synthesized 3-field template and actually persist drafts.
     """
-    db = _FakeDB(ISO_CLAUSES_DOCS, ISO_STATE_DOCS)
+    db = _FakeDB(ISO_CLAUSES_DOCS, iso_state_docs=[])  # DB genuinely has nothing, any version_id
 
-    async def fail_if_called(**_kwargs: Any) -> Any:
-        raise AssertionError("LLM should not be called when no state fields are found")
+    async def fake_complete(**_kwargs: Any) -> SimpleNamespace:
+        return _completion("Please provide the requested evidence.")
 
-    monkeypatch.setattr(missing_requests_module, "complete", fail_if_called)
+    monkeypatch.setattr(missing_requests_module, "complete", fake_complete)
 
     gap_result = {"clause_id": "6.1.2"}
-    await generate_missing_requests(db, "tenant-1", "analysis-1", gap_result)  # defaults to DEFAULT_VERSION_ID
+    count = await generate_missing_requests(db, "tenant-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
 
-    assert db.missing_request_store.inserted == []
+    assert count == 3  # the 3 standard synthesized fields
+    field_paths = {item["field_path"] for item in db.missing_request_store.inserted}
+    assert field_paths == {"6.1.2.gap_identified", "6.1.2.conformance_score", "6.1.2.evidence_notes"}
+
+
+@pytest.mark.asyncio
+async def test_missing_requests_wrong_version_id_falls_back_but_still_persists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """version_id still matters for correctness — calling with the wrong version_id (as
+    happened before the version_id-threading fix) means the DB-curated fields aren't found
+    and the synthesized fallback (generic labels) is used instead of the DB's specific ones.
+    But unlike before, it no longer silently produces nothing: the synthesized fallback still
+    persists drafts, so a wrong/missing version_id degrades quality rather than causing a
+    total blackout.
+    """
+    db = _FakeDB(ISO_CLAUSES_DOCS, ISO_STATE_DOCS)  # data only exists under CUSTOM_VERSION
+
+    async def fake_complete(**_kwargs: Any) -> SimpleNamespace:
+        return _completion("Please provide the requested evidence.")
+
+    monkeypatch.setattr(missing_requests_module, "complete", fake_complete)
+
+    gap_result = {"clause_id": "6.1.2"}
+    count = await generate_missing_requests(db, "tenant-1", "analysis-1", gap_result)  # defaults to DEFAULT_VERSION_ID
+
+    assert count == 3  # synthesized fallback, not the single DB-curated field
+    assert all(
+        item["field_path"] in {"6.1.2.gap_identified", "6.1.2.conformance_score", "6.1.2.evidence_notes"}
+        for item in db.missing_request_store.inserted
+    )
 
 
 def test_default_version_id_is_not_the_custom_version() -> None:

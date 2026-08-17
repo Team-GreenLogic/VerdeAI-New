@@ -60,10 +60,11 @@ async def handle_analysis_gaps_ready(message: IncomingMessage) -> None:
     for i, gap_result in enumerate(gap_results, 1):
         clause_id = gap_result.get("clause_id", "?")
         try:
-            await generate_missing_requests(db, tenant_id, analysis_id, gap_result, version_id=version_id)
+            count = await generate_missing_requests(db, tenant_id, analysis_id, gap_result, version_id=version_id)
             logger.info(
-                "Missing requests generated",
+                "Missing requests generated" if count else "No missing requests generated",
                 clause_id=clause_id,
+                count=count,
                 progress=f"{i}/{total}",
             )
         except Exception as exc:

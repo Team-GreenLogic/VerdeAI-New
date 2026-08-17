@@ -23,6 +23,8 @@ instead up or down
 
 sudo docker compose logs -f gap-analyzer
 
+sudo docker compose logs -f missing-requirements
+
 ---
 
 mongodb://localhost:27017/?directConnection=true

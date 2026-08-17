@@ -13,6 +13,7 @@ from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 from verdeai_shared.db.repositories.missing_request_store import MissingRequestStoreRepository
+from verdeai_shared.iso.state_template import synthesize_state_fields
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
 
@@ -36,10 +37,12 @@ async def generate_missing_requests(
     analysis_id: str,
     gap_result: dict[str, Any],
     version_id: str = DEFAULT_VERSION_ID,
-) -> None:
+) -> int:
     """Draft information-request messages for each missing state field and persist them.
 
     Idempotent: skips if requests already exist for this analysis_id + clause_id.
+    Returns the number of requests persisted (0 if none — callers can use this to log an
+    accurate outcome instead of assuming "no exception" means "something was generated").
     """
     clause_id: str = gap_result["clause_id"]
 
@@ -49,19 +52,24 @@ async def generate_missing_requests(
     )
     if existing:
         logger.debug("Missing requests already exist — skipping", clause_id=clause_id)
-        return
+        return 0
 
     # Load clause details for title
     clause = await ISOClausesRepository(db).get(clause_id, version_id=version_id)
     clause_title = clause.get("title", clause_id) if clause else clause_id
 
-    # Load state template fields (cap to avoid excessive LLM calls)
+    # Load state template fields (cap to avoid excessive LLM calls). Fall back to the standard
+    # synthesized template when the DB has no rows for this version (e.g. a custom-built ISO
+    # version whose iso_state_template rows were never persisted) — this only ever triggers when
+    # the DB genuinely has nothing, so DB-backed data always takes priority.
     state_entries = await ISOStateRepository(db).list_for_clause(clause_id, version_id=version_id)
+    if not state_entries:
+        logger.info(
+            "No state fields in DB for clause — using synthesized standard template",
+            clause_id=clause_id, version_id=version_id,
+        )
+        state_entries = synthesize_state_fields(clause_id)
     fields = state_entries[:_MAX_FIELDS_PER_CLAUSE]
-
-    if not fields:
-        logger.info("No state fields found for clause", clause_id=clause_id, version_id=version_id)
-        return
 
     items: list[dict[str, Any]] = []
     system_prompt = _jinja.get_template("draft_request_system.j2").render()
@@ -109,3 +117,4 @@ async def generate_missing_requests(
     if items:
         await MissingRequestStoreRepository(db, tenant_id).insert_many(analysis_id, items)
         logger.info("Persisted missing requests", clause_id=clause_id, count=len(items))
+    return len(items)

@@ -29,6 +29,7 @@ from motor.motor_asyncio import AsyncIOMotorGridFSBucket  # type: ignore[import-
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.iso_versions import ISOVersionsRepository
+from verdeai_shared.iso.state_template import STANDARD_STATE_FIELDS
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.retrieval.embedder import embed_documents
 from verdeai_shared.settings import settings
@@ -44,11 +45,7 @@ class BuildPaused(Exception):
     """Raised when the pipeline detects a pause signal and exits cleanly."""
 
 # State template fields (same as default version for parity)
-_STATE_FIELDS = [
-    {"suffix": "gap_identified", "label": "Gap identified", "field_type": "boolean", "default": False},
-    {"suffix": "conformance_score", "label": "Conformance score (0–1)", "field_type": "float", "default": 0.0},
-    {"suffix": "evidence_notes", "label": "Evidence notes", "field_type": "string", "default": ""},
-]
+_STATE_FIELDS = STANDARD_STATE_FIELDS
 
 # Max chars to send to LLM (GPT-4 context ~120k tokens ≈ 480k chars; be conservative)
 _MAX_DOC_CHARS = 180_000
