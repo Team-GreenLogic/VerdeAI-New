@@ -23,6 +23,7 @@ export default {
       animation: {
         'fade-in-up': 'fadeInUp 0.4s ease-out forwards',
         'slide-in-right': 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'slide-in-left': 'slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'scale-in': 'scaleIn 0.3s ease-out forwards',
       },
       keyframes: {
@@ -32,6 +33,10 @@ export default {
         },
         slideInRight: {
           '0%': { opacity: 0, transform: 'translateX(20px)' },
+          '100%': { opacity: 1, transform: 'translateX(0)' },
+        },
+        slideInLeft: {
+          '0%': { opacity: 0, transform: 'translateX(-20px)' },
           '100%': { opacity: 1, transform: 'translateX(0)' },
         },
         scaleIn: {

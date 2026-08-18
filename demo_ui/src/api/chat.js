@@ -1,9 +1,23 @@
-import { apiPost } from './client.js'
+import { apiDelete, apiGet, apiPost } from './client.js'
 
 const CHAT_URL = import.meta.env.VITE_CHAT_URL
 
 export async function createSession() {
   return apiPost('/chat/session', {}, { chat: true })
+}
+
+/** List this tenant's past chat sessions, most recently active first. */
+export async function listSessions() {
+  return apiGet('/chat/sessions', { chat: true })
+}
+
+/** Full message history for one session, for resuming a past conversation. */
+export async function getSessionMessages(sessionId) {
+  return apiGet(`/chat/sessions/${sessionId}/messages`, { chat: true })
+}
+
+export async function deleteSession(sessionId) {
+  return apiDelete(`/chat/sessions/${sessionId}`, { chat: true })
 }
 
 /**

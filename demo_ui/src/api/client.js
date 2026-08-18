@@ -82,8 +82,9 @@ export async function apiPut(path, body = null, { chat = false } = {}) {
   return handleResponse(res)
 }
 
-export async function apiDelete(path) {
-  const res = await fetch(`${API_URL}${path}`, {
+export async function apiDelete(path, { chat = false } = {}) {
+  const base = chat ? CHAT_URL : API_URL
+  const res = await fetch(`${base}${path}`, {
     method: 'DELETE',
     headers: authHeaders(),
   })
