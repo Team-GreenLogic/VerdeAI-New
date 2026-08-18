@@ -51,3 +51,29 @@ abc12345
 ---
 
 bash migrate_models_to_langfuse.sh
+
+
+
+
+
+claude -- resume document-versioning-dedup
+
+
+---
+
+sudo docker compose exec -T mongodb mongosh --quiet verdeai --eval ' 
+  db.chunks.dropSearchIndex("chunks_vector_idx");
+  db.chunks.updateMany({ superseded: { $exists: false } }, { $set: { superseded: false } });
+  '
+
+sudo docker compose exec -T mongodb mongosh --quiet verdeai --eval ' 
+  db.chunks.createSearchIndex("chunks_vector_idx", "vectorSearch", {
+    fields: [                                                                               
+      { type: "vector", path: "embedding", numDimensions: 1024, similarity: "cosine" },
+      { type: "filter", path: "tenant_id" },
+      { type: "filter", path: "document_id" },
+      { type: "filter", path: "content_type" },
+      { type: "filter", path: "superseded" },
+      { type: "filter", path: "created_at" }
+    ]
+  });'

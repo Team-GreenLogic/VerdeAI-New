@@ -8,6 +8,8 @@ import {
 import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
+import MarkdownContent from '../components/MarkdownContent.jsx'
+import StalenessBanner from '../components/StalenessBanner.jsx'
 
 const ACTIVE = ['pending', 'running', 'paused']
 const DONE   = ['complete', 'failed']
@@ -73,8 +75,8 @@ function CitationModal({ citation, onClose }) {
           </button>
         </div>
         <div className="p-5 overflow-y-auto">
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-            {citation.text || 'No excerpt available.'}
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
+            <MarkdownContent content={citation.text || 'No excerpt available.'} />
           </div>
         </div>
       </div>
@@ -607,29 +609,8 @@ export default function AnalysisDetailPage() {
       </div>
 
       {/* Staleness banner — documents changed since this analysis ran */}
-      {analysis.status === 'complete' && staleness?.stale && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-          <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          </svg>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-800">New uploads detected since this analysis</p>
-            <p className="text-xs text-amber-700 mt-0.5">
-              {staleness.new_chunk_count > 0 && `${staleness.new_chunk_count} new document chunk${staleness.new_chunk_count !== 1 ? 's' : ''}`}
-              {staleness.new_chunk_count > 0 && staleness.removed_chunk_count > 0 && ', '}
-              {staleness.removed_chunk_count > 0 && `${staleness.removed_chunk_count} removed`}
-              {' '}since this analysis ran. Re-analyze the affected clauses only.
-            </p>
-          </div>
-          <button
-            onClick={handleReanalyze}
-            disabled={reanalyzing}
-            className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60 transition-colors"
-          >
-            {reanalyzing && <Spinner size="sm" />}
-            {reanalyzing ? 'Starting…' : 'Re-analyze differences'}
-          </button>
-        </div>
+      {analysis.status === 'complete' && (
+        <StalenessBanner staleness={staleness} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />
       )}
 
       {/* Delta badge — this analysis was an incremental re-run */}

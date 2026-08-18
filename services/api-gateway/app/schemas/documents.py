@@ -18,6 +18,8 @@ class DocumentItem(BaseModel):
     status: str
     pages: int | None
     uploaded_at: datetime
+    previous_version_id: str | None = None
+    cdc_overlap: float | None = None
 
 
 class DocumentListResponse(BaseModel):

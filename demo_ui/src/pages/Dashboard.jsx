@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getCompleteness } from '../api/orgProfile.js'
-import { listAnalyses, createAnalysis, getResults } from '../api/analyses.js'
+import { listAnalyses, createAnalysis, getResults, getStaleness, reanalyzeDelta } from '../api/analyses.js'
 import { listDocuments } from '../api/documents.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
+import StalenessBanner from '../components/StalenessBanner.jsx'
 
 /* ── Circular Progress Ring ─────────────────────── */
 function ProgressRing({ value, size = 120, strokeWidth = 10 }) {
@@ -111,6 +112,8 @@ export default function Dashboard() {
   const [analyses, setAnalyses] = useState([])
   const [docs, setDocs] = useState([])
   const [latestResults, setLatestResults] = useState(null)
+  const [staleness, setStaleness] = useState(null)
+  const [reanalyzing, setReanalyzing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const navigate = useNavigate()
@@ -140,6 +143,27 @@ export default function Dashboard() {
       setLatestResults(null)
     }
   }, [latest?.analysis_id, latest?.status])
+  // Check whether the latest analysis's evidence has changed since it ran.
+  useEffect(() => {
+    if (latest?.status !== 'complete') { setStaleness(null); return }
+    let cancelled = false
+    getStaleness(latest.analysis_id)
+      .then(s => { if (!cancelled) setStaleness(s) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [latest?.analysis_id, latest?.status])
+
+  async function handleReanalyze() {
+    setReanalyzing(true)
+    try {
+      const res = await reanalyzeDelta(latest.analysis_id)
+      navigate(`/analyses/${res.analysis_id}`)
+    } catch (err) {
+      alert(err.message)
+      setReanalyzing(false)
+    }
+  }
+
   const activeStatuses = ['pending', 'running']
   const hasActive = analyses.some(a => activeStatuses.includes(a.status))
   const processedDocs = docs.filter(d => d.status === 'ready').length
@@ -243,6 +267,11 @@ export default function Dashboard() {
             <p className="text-xs text-slate-400 font-mono mb-3">
               {latest.analysis_id.slice(0, 12)}… · {new Date(latest.created_at).toLocaleString()}
             </p>
+            {latest.status === 'complete' && staleness?.stale && (
+              <div className="mb-4">
+                <StalenessBanner staleness={staleness} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />
+              </div>
+            )}
             {latestResults && latestResults.length > 0 ? (() => {
               const total = latestResults.length
               const counts = latestResults.reduce((acc, r) => { acc[r.decision] = (acc[r.decision] || 0) + 1; return acc }, {})

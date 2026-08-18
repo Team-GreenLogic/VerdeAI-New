@@ -11,7 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import markdown as _markdown
+import nh3
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
@@ -40,6 +43,30 @@ _DECISION_CLASS = {
     "Not Met": "notmet",
     "Insufficient Evidence": "insufficient",
 }
+
+# Citation excerpts come from LlamaParse-parsed document chunks, which for
+# complex tables often embed raw HTML (<table><tr><td>...) inline in the
+# markdown text. Render + sanitize to a narrow allowlist so tables show up
+# properly in the PDF instead of as literal escaped tags.
+_CITATION_ALLOWED_TAGS = {
+    "p", "br", "strong", "em", "b", "i", "ul", "ol", "li",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "a",
+}
+_CITATION_ALLOWED_ATTRIBUTES = {
+    "a": {"href"},
+    "td": {"colspan", "rowspan", "align"},
+    "th": {"colspan", "rowspan", "align"},
+}
+
+
+def _citation_html(text: str) -> Markup:
+    """Render a citation excerpt to sanitized HTML safe for the report template."""
+    if not text:
+        return Markup("")
+    html = _markdown.markdown(text, extensions=["tables"])
+    clean = nh3.clean(html, tags=_CITATION_ALLOWED_TAGS, attributes=_CITATION_ALLOWED_ATTRIBUTES)
+    return Markup(clean)
 
 
 def _clause_sort_key(clause_id: str) -> list[int]:
@@ -143,7 +170,7 @@ async def build_report_context(
             "reasoning": r.get("reasoning", ""),
             "missing_evidence": r.get("missing_evidence", []) or [],
             "citations": [
-                {"label": _citation_label(c), "text": c.get("text", "")}
+                {"label": _citation_label(c), "html": _citation_html(c.get("text", ""))}
                 for c in (r.get("citations", []) or [])
             ],
             "recommendations": recs_by_clause.get(cid, []),
