@@ -72,13 +72,23 @@ async def generate_recommendations(
     org_entries = await org_cursor.to_list(None)
     org_profile_map = {e["field_path"]: e.get("value") for e in org_entries}
 
+    # recommend_system.j2 requires every recommendation to cite a specific failing item, so
+    # an empty list would leave it nothing to anchor to. The gap analyser only lists evidence
+    # genuinely needed to adjudicate the clause, so a non-Met clause can legitimately have an
+    # empty missing_evidence — fall back to the findings that actually failed.
+    failing_items = gap_result.get("missing_evidence") or [
+        f"{f.get('req_id', '')}: {f.get('notes', '')}".strip(": ")
+        for f in gap_result.get("findings", [])
+        if f.get("status") in ("unmet", "partial")
+    ]
+
     # Render prompt
     system_prompt = _jinja.get_template("recommend_system.j2").render()
     user_prompt = _jinja.get_template("recommend_user.j2").render(
         clause_id=clause_id,
         clause_title=clause_title,
         decision=gap_result.get("decision", "Not Met"),
-        failing_assertions_json=json.dumps(gap_result.get("missing_evidence", [])),
+        failing_assertions_json=json.dumps(failing_items),
         reference_context_json=json.dumps(org_profile_map),
         actionable_seeds_json="[]",
     )

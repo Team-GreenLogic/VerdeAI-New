@@ -66,6 +66,33 @@ def test_deterministic_grounding_rejects_empty_citations_for_not_met():
     assert any("requires at least one grounded citation" in r for r in reasons)
 
 
+def test_deterministic_grounding_rejects_empty_citations_for_met():
+    """An uncited "Met" is the most consequential false positive an audit tool can emit,
+    so it is gated exactly like Not Met / Partially Met."""
+    verdict = GapVerdict(
+        decision="Met",
+        confidence=0.9,
+        reasoning="The organisation continually improves its environmental performance.",
+        citations=[],
+    )
+    passed, reasons = check_deterministic_grounding(verdict, num_chunks=5)
+    assert passed is False
+    assert any("requires at least one grounded citation" in r for r in reasons)
+
+
+def test_deterministic_grounding_allows_empty_citations_for_insufficient_evidence():
+    """Insufficient Evidence is the one decision that legitimately has nothing to cite."""
+    verdict = GapVerdict(
+        decision="Insufficient Evidence",
+        confidence=0.0,
+        reasoning="No relevant document chunks were retrieved for this clause.",
+        citations=[],
+    )
+    passed, reasons = check_deterministic_grounding(verdict, num_chunks=0)
+    assert passed is True
+    assert reasons == []
+
+
 def test_deterministic_grounding_rejects_fabricated_chunk_reference():
     verdict = GapVerdict(
         decision="Not Met",

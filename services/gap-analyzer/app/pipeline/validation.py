@@ -19,7 +19,11 @@ _CHUNK_MENTION_RE = re.compile(r"[Cc]hunk\s+(\d+)")
 _LOW_EVIDENCE_CONFIDENCE_CAP = 0.5
 _MIN_GROUNDED_CHUNKS_FOR_HIGH_CONFIDENCE = 2
 
-_DECISIONS_REQUIRING_CITATIONS = {"Not Met", "Partially Met"}
+# Any decision that asserts a compliance conclusion must point at evidence. "Met" is
+# included: an uncited "Met" is the most consequential false positive an audit tool can
+# emit, and the gap_analyse prompt already requires evidence of implementation for it.
+# "Insufficient Evidence" is the only exemption — by definition it has nothing to cite.
+_DECISIONS_REQUIRING_CITATIONS = {"Met", "Not Met", "Partially Met"}
 
 _STATUS_RANK = {"satisfied": 2, "partial": 1, "unmet": 0}
 
