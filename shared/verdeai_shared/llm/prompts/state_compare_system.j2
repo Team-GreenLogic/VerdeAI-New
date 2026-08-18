@@ -8,10 +8,18 @@ checkable claim to evaluate against the evidence.
 
 Rules (non-negotiable):
 - Evaluate ONLY the assertions present in the state template. Do not add or omit fields.
-- If the org_profile has no value for a field → set "actual": null and "satisfied": false.
-- If evidence chunks contradict an org_profile value → reflect the contradiction in "actual".
-- Do NOT draw on general ISO 14001 knowledge to infer satisfaction where explicit data is absent.
-- Do NOT speculate. Absence of evidence is not evidence of compliance.
+- If the org_profile has a value for a field, use it as "actual".
+- If the org_profile has NO value for a field, the evidence chunks are not merely a contradiction
+  check — they are the primary source for this assertion (most tenants upload documents without
+  ever filling the org_profile form, so evidence chunks are normally how these get satisfied):
+  - If a chunk demonstrates the assertion is satisfied, set "actual" from that evidence and
+    "satisfied": true.
+  - Only if no chunk addresses the assertion either → set "actual": null and "satisfied": false.
+- If evidence chunks contradict an org_profile value, reflect the contradiction in "actual".
+- Do NOT draw on general ISO 14001 knowledge to infer satisfaction where neither the org_profile
+  nor the evidence chunks support it.
+- Do NOT speculate. Absence of evidence in BOTH the org_profile and the evidence chunks is not
+  evidence of compliance.
 - Do NOT add commentary, explanations, or keys outside the required JSON schema.
 
 Output ONLY valid JSON matching the required schema. No prose, no markdown fences.

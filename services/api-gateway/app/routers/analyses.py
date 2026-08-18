@@ -284,6 +284,26 @@ async def get_analysis(
     return doc
 
 
+@router.delete("/{analysis_id}", status_code=status.HTTP_200_OK)
+async def delete_analysis(
+    analysis_id: str,
+    principal: CurrentPrincipal,
+) -> dict[str, str]:
+    """Delete an analysis report and its associated results, recommendations, and missing requirements."""
+    tenant_id = principal.tenant_id
+    db = get_database()
+
+    await _get_owned(db, analysis_id, tenant_id)
+
+    await db.analyses.delete_one({"analysis_id": analysis_id, "tenant_id": tenant_id})
+    await db.result_store.delete_many({"analysis_id": analysis_id, "tenant_id": tenant_id})
+    await db.recommendation_store.delete_many({"analysis_id": analysis_id, "tenant_id": tenant_id})
+    await db.missing_request_store.delete_many({"analysis_id": analysis_id, "tenant_id": tenant_id})
+
+    logger.info("Analysis deleted", analysis_id=analysis_id, tenant_id=tenant_id)
+    return {"analysis_id": analysis_id, "status": "deleted"}
+
+
 @router.get("/{analysis_id}/staleness", response_model=StalenessResponse)
 async def get_staleness(
     analysis_id: str,
@@ -457,16 +477,34 @@ async def download_report(
 async def get_recommendations(
     analysis_id: str,
     principal: CurrentPrincipal,
+    sort_by: str | None = None,
+    order: str = "asc",
 ) -> list[RecommendationItem]:
-    """Get per-clause recommendations generated after gap analysis."""
+    """Get per-clause recommendations generated after gap analysis with optional sorting."""
     tenant_id = principal.tenant_id
     db = get_database()
 
     await _get_owned(db, analysis_id, tenant_id)
 
+    sort_field_map = {
+        "clause_id": "clause_id",
+        "cost": "cost",
+        "effort": "effort_weeks",
+        "effort_weeks": "effort_weeks",
+        "impact": "impact",
+    }
+
+    sort_rules: list[tuple[str, int]] = []
+    if sort_by and sort_by in sort_field_map:
+        field = sort_field_map[sort_by]
+        direction = -1 if order.lower() == "desc" else 1
+        sort_rules = [(field, direction), ("clause_id", 1)]
+    else:
+        sort_rules = [("clause_id", 1)]
+
     cursor = db.recommendation_store.find(
         {"analysis_id": analysis_id, "tenant_id": tenant_id},
-        sort=[("clause_id", 1)],
+        sort=sort_rules,
     )
     rows = await cursor.to_list(length=None)
 

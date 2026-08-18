@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiGetBlob } from './client.js'
+import { apiGet, apiPost, apiDelete, apiGetBlob } from './client.js'
 
 export async function getVersions() {
   return apiGet('/analyses/versions')
@@ -16,6 +16,10 @@ export async function getAnalysis(id) {
   return apiGet(`/analyses/${id}`)
 }
 
+export async function deleteAnalysis(id) {
+  return apiDelete(`/analyses/${id}`)
+}
+
 export async function pauseAnalysis(id) {
   return apiPost(`/analyses/${id}/pause`)
 }
@@ -28,8 +32,12 @@ export async function getResults(id) {
   return apiGet(`/analyses/${id}/results`)
 }
 
-export async function getRecommendations(id) {
-  return apiGet(`/analyses/${id}/recommendations`)
+export async function getRecommendations(id, { sortBy, order } = {}) {
+  const params = new URLSearchParams()
+  if (sortBy) params.set('sort_by', sortBy)
+  if (order) params.set('order', order)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return apiGet(`/analyses/${id}/recommendations${qs}`)
 }
 
 export async function getMissingRequirements(id) {
