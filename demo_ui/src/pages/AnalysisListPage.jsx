@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { listAnalyses, createAnalysis, getVersions } from '../api/analyses.js'
+import { listAnalyses, createAnalysis, getVersions, getStaleness, reanalyzeDelta } from '../api/analyses.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
+import StalenessBanner from '../components/StalenessBanner.jsx'
 
 const DEFAULT_VERSION_ID = 'iso-14001-2015'
 
@@ -24,6 +25,8 @@ export default function AnalysisListPage() {
   const [selectedVersion, setSelectedVersion] = useState(DEFAULT_VERSION_ID)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [staleness, setStaleness] = useState(null)
+  const [reanalyzing, setReanalyzing] = useState(false)
   const navigate = useNavigate()
 
   async function refresh() {
@@ -46,6 +49,28 @@ export default function AnalysisListPage() {
   const activeStatuses = ['pending', 'running']
   const hasActive = analyses.some(a => activeStatuses.includes(a.status))
   const chosenVersion = versions.find(v => v.version_id === selectedVersion)
+  const latest = analyses[0] || null
+
+  // Check whether the newest analysis's evidence has changed since it ran.
+  useEffect(() => {
+    if (latest?.status !== 'complete') { setStaleness(null); return }
+    let cancelled = false
+    getStaleness(latest.analysis_id)
+      .then(s => { if (!cancelled) setStaleness(s) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [latest?.analysis_id, latest?.status])
+
+  async function handleReanalyze() {
+    setReanalyzing(true)
+    try {
+      const res = await reanalyzeDelta(latest.analysis_id)
+      navigate(`/analyses/${res.analysis_id}`)
+    } catch (err) {
+      alert(err.message)
+      setReanalyzing(false)
+    }
+  }
 
   async function handleStart() {
     setStarting(true)
@@ -208,14 +233,21 @@ export default function AnalysisListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {analyses.map(a => (
+              {analyses.map((a, idx) => (
                 <tr key={a.analysis_id} className="hover:bg-brand-50/40 transition-colors">
                   <td className="px-4 py-3">
                     <span className="font-mono text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
                       {a.analysis_id.slice(0, 8)}…
                     </span>
                   </td>
-                  <td className="px-4 py-3"><Badge status={a.status} /></td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Badge status={a.status} />
+                      {idx === 0 && (
+                        <StalenessBanner staleness={staleness} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} variant="compact" />
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     {a.gap_count != null ? (
                       <span className={`font-bold ${a.gap_count > 0 ? 'text-red-600' : 'text-slate-400'}`}>
