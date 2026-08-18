@@ -138,6 +138,9 @@
   .miss li { color: #b91c1c; }
   .cites .cite { font-size: 8.5pt; color: #475569; margin-bottom: 4px; }
   .cites .cite .src { font-weight: 700; color: #334155; }
+  .cites .cite table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 8pt; }
+  .cites .cite th, .cites .cite td { border: 1px solid #e2e8f0; padding: 2px 4px; text-align: left; }
+  .cites .cite th { background: #f8fafc; font-weight: 700; }
 
   /* ---- Recommendations / missing info ---- */
   .rec { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; page-break-inside: avoid; }
@@ -276,7 +279,7 @@
     <div class="label">Evidence &amp; Citations</div>
     <div class="cites">
       {% for cite in c.citations %}
-      <div class="cite"><span class="src">{{ cite.label }}</span>{% if cite.text %} — {{ cite.text|truncate(240) }}{% endif %}</div>
+      <div class="cite"><span class="src">{{ cite.label }}</span>{% if cite.html %} — {{ cite.html|safe }}{% endif %}</div>
       {% endfor %}
     </div>
     {% endif %}

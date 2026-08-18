@@ -8,6 +8,7 @@ import {
 import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
+import MarkdownContent from '../components/MarkdownContent.jsx'
 
 const ACTIVE = ['pending', 'running', 'paused']
 const DONE   = ['complete', 'failed']
@@ -73,8 +74,8 @@ function CitationModal({ citation, onClose }) {
           </button>
         </div>
         <div className="p-5 overflow-y-auto">
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-            {citation.text || 'No excerpt available.'}
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
+            <MarkdownContent content={citation.text || 'No excerpt available.'} />
           </div>
         </div>
       </div>
