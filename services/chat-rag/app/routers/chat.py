@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
+from verdeai_shared.db.repositories.chat_history import ChatHistoryRepository
 
 from app.config import settings
 from app.pipeline.history import append_turn, load_history
@@ -29,10 +30,64 @@ class ChatSessionResponse(BaseModel):
     session_id: str
 
 
+class ChatSessionSummary(BaseModel):
+    session_id: str
+    title: str
+    last_message_at: str
+    message_count: int
+
+
+class ChatMessageOut(BaseModel):
+    role: str
+    content: str
+    citations: list[dict] = []
+    created_at: str
+
+
 @router.post("/session", response_model=ChatSessionResponse)
 async def create_session(principal: CurrentPrincipal) -> ChatSessionResponse:
     """Create a new chat session. Returns a session_id to use in subsequent requests."""
     return ChatSessionResponse(session_id=str(uuid.uuid4()))
+
+
+@router.get("/sessions", response_model=list[ChatSessionSummary])
+async def list_sessions(principal: CurrentPrincipal) -> list[ChatSessionSummary]:
+    """List this tenant's past chat sessions, most recently active first."""
+    db = get_database()
+    rows = await ChatHistoryRepository(db, principal.tenant_id).list_sessions()
+    return [
+        ChatSessionSummary(
+            session_id=r["session_id"],
+            title=(r.get("title") or "")[:80],
+            last_message_at=r["last_message_at"].isoformat(),
+            message_count=r["message_count"],
+        )
+        for r in rows
+    ]
+
+
+@router.get("/sessions/{session_id}/messages", response_model=list[ChatMessageOut])
+async def get_session_messages(session_id: str, principal: CurrentPrincipal) -> list[ChatMessageOut]:
+    """Full message history for one session, for resuming a past conversation."""
+    db = get_database()
+    rows = await ChatHistoryRepository(db, principal.tenant_id).list_all(session_id)
+    return [
+        ChatMessageOut(
+            role=r["role"],
+            content=r["content"],
+            citations=r.get("citations", []),
+            created_at=r["created_at"].isoformat(),
+        )
+        for r in rows
+    ]
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str, principal: CurrentPrincipal) -> dict[str, int]:
+    """Delete a past conversation."""
+    db = get_database()
+    deleted = await ChatHistoryRepository(db, principal.tenant_id).delete_session(session_id)
+    return {"deleted": deleted}
 
 
 @router.post("")
@@ -64,6 +119,7 @@ async def chat(
 
     async def _generate():
         answer_parts: list[str] = []
+        citations: list[dict] = []
         done_yielded = False
         try:
             # Load history inside the generator so Redis errors surface as SSE errors
@@ -72,6 +128,8 @@ async def chat(
             async for event in rag_stream(db, tenant_id, question, history):
                 if event["type"] == "token":
                     answer_parts.append(event["content"])
+                if event["type"] == "citations":
+                    citations = event.get("citations", [])
                 if event["type"] == "done":
                     done_yielded = True
                 yield {"data": json.dumps(event)}
@@ -82,7 +140,7 @@ async def chat(
             if not done_yielded:
                 yield {"data": json.dumps({"type": "done"})}
 
-        # Persist turn to history after streaming completes
+        # Persist turn: Redis (short-lived prompt-context window) + Mongo (durable, user-facing history)
         full_answer = "".join(answer_parts)
         if full_answer:
             try:
@@ -92,5 +150,12 @@ async def chat(
                 )
             except Exception as exc:
                 logger.warning("Failed to save chat history", error=str(exc))
+
+            try:
+                history_repo = ChatHistoryRepository(db, tenant_id)
+                await history_repo.append(session_id, "user", question)
+                await history_repo.append(session_id, "assistant", full_answer, citations)
+            except Exception as exc:
+                logger.warning("Failed to persist chat history to Mongo", error=str(exc))
 
     return EventSourceResponse(_generate())

@@ -68,6 +68,7 @@ services:
 
   mongodb:
     image: mongodb/mongodb-atlas-local:8.0
+    hostname: mongodb
     ports: ["27017:27017"]
     volumes:
       - mongo-data:/data/db
