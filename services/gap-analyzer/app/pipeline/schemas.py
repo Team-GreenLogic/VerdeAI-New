@@ -62,6 +62,10 @@ class GapVerdict(BaseModel):
     findings: list[SubRequirementFinding] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
+    # Not produced by the LLM — stamped at persist time with the document ids whose
+    # chunks were retrieved for this clause, so delta re-analysis can tell which
+    # verdicts a superseded/removed document invalidates.
+    source_document_ids: list[str] = Field(default_factory=list)
 
     @field_validator("confidence", mode="before")
     @classmethod

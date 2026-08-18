@@ -28,6 +28,20 @@ class AnalysisSummary(BaseModel):
     scope: Any
     version_id: str = DEFAULT_VERSION_ID
     created_at: datetime
+    mode: str = "full"
+    parent_analysis_id: str | None = None
+
+
+class StalenessResponse(BaseModel):
+    stale: bool
+    new_chunk_count: int
+    removed_chunk_count: int
+
+
+class DeltaReanalyzeResponse(BaseModel):
+    analysis_id: str
+    parent_analysis_id: str
+    status: str
 
 
 class VersionItem(BaseModel):
@@ -124,6 +138,8 @@ async def list_analyses(principal: CurrentPrincipal) -> list[AnalysisSummary]:
             scope=r.get("scope"),
             version_id=r.get("version_id", DEFAULT_VERSION_ID),
             created_at=r.get("created_at", datetime.now(timezone.utc)),
+            mode=r.get("mode", "full"),
+            parent_analysis_id=r.get("parent_analysis_id"),
         )
         for r in rows
     ]
@@ -266,6 +282,113 @@ async def get_analysis(
     doc = await _get_owned(db, analysis_id, tenant_id)
     doc.pop("_id", None)
     return doc
+
+
+@router.get("/{analysis_id}/staleness", response_model=StalenessResponse)
+async def get_staleness(
+    analysis_id: str,
+    principal: CurrentPrincipal,
+) -> StalenessResponse:
+    """Report whether the tenant's evidence has changed since this analysis ran.
+
+    Powers the "New uploads detected" banner: counts chunks ingested after the
+    analysis baseline (new evidence) and chunks superseded after it (removed /
+    modified evidence). Either kind makes the analysis potentially out of date.
+    """
+    tenant_id = principal.tenant_id
+    db = get_database()
+    doc = await _get_owned(db, analysis_id, tenant_id)
+    baseline = doc.get("created_at", datetime.now(timezone.utc))
+
+    new_chunk_count = await db.chunks.count_documents({
+        "tenant_id": tenant_id,
+        "superseded": {"$ne": True},
+        "created_at": {"$gt": baseline},
+    })
+    removed_chunk_count = await db.chunks.count_documents({
+        "tenant_id": tenant_id,
+        "superseded": True,
+        "superseded_at": {"$gt": baseline},
+    })
+
+    return StalenessResponse(
+        stale=(new_chunk_count > 0 or removed_chunk_count > 0),
+        new_chunk_count=new_chunk_count,
+        removed_chunk_count=removed_chunk_count,
+    )
+
+
+@router.post(
+    "/{analysis_id}/reanalyze-delta",
+    response_model=DeltaReanalyzeResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def reanalyze_delta(
+    analysis_id: str,
+    principal: CurrentPrincipal,
+) -> DeltaReanalyzeResponse:
+    """Start an incremental re-analysis of only the clauses affected by evidence
+    added or removed since the parent analysis. Creates a new versioned analysis
+    that copies unaffected verdicts forward from the parent."""
+    tenant_id = principal.tenant_id
+    db = get_database()
+
+    parent = await _get_owned(db, analysis_id, tenant_id)
+    if parent.get("status") != "complete":
+        raise HTTPException(
+            status_code=409,
+            detail="Delta re-analysis is only available for a completed analysis "
+                   f"(current status: '{parent.get('status', 'unknown')}').",
+        )
+
+    await _assert_no_active(db, tenant_id)
+
+    new_analysis_id = str(uuid.uuid4())
+    baseline_at = parent.get("created_at", datetime.now(timezone.utc))
+    version_id = parent.get("version_id", DEFAULT_VERSION_ID)
+    scope = parent.get("scope", "full")
+    now = datetime.now(timezone.utc)
+
+    await db.analyses.insert_one({
+        "analysis_id": new_analysis_id,
+        "tenant_id": tenant_id,
+        "scope": scope,
+        "version_id": version_id,
+        "status": "pending",
+        "gap_count": None,
+        "created_at": now,
+        "mode": "delta",
+        "parent_analysis_id": analysis_id,
+        "baseline_at": baseline_at,
+    })
+
+    event = AnalysisRequested(
+        tenant_id=tenant_id,
+        analysis_id=new_analysis_id,
+        scope=scope,
+        version_id=version_id,
+        mode="delta",
+        parent_analysis_id=analysis_id,
+        baseline_at=baseline_at,
+    )
+    try:
+        await publish_analysis_requested(event)
+    except Exception as exc:
+        logger.error("Failed to publish delta AnalysisRequested", error=str(exc))
+        await db.analyses.delete_one({"analysis_id": new_analysis_id})
+        raise HTTPException(status_code=502, detail="Failed to queue delta analysis — try again")
+
+    logger.info(
+        "Delta analysis queued",
+        analysis_id=new_analysis_id,
+        parent_analysis_id=analysis_id,
+        tenant_id=tenant_id,
+    )
+    return DeltaReanalyzeResponse(
+        analysis_id=new_analysis_id,
+        parent_analysis_id=analysis_id,
+        status="pending",
+    )
 
 
 @router.get("/{analysis_id}/results", response_model=list[GapResult])

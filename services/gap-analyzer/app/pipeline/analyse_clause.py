@@ -121,7 +121,7 @@ class ClauseState(TypedDict, total=False):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _build_query_text(clause: dict[str, Any]) -> str:
+def build_query_text(clause: dict[str, Any]) -> str:
     """Prefer the LLM-generated retrieval query (phrased for semantic search over
     company documents); fall back to title+requirements for clauses extracted
     before this field existed (e.g. hardcoded seed clauses)."""
@@ -219,7 +219,7 @@ async def _emit_step(step_name: str, config: RunnableConfig) -> None:
 async def _embed_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
     await _emit_step("embed", config)
     clause = state["clause"]
-    query_text = _build_query_text(clause)
+    query_text = build_query_text(clause)
     # Let exceptions propagate — the actor catches them and records a proper Error
     # decision rather than silently cascading Insufficient Evidence to all remaining clauses.
     vector: list[float] = await embed_query(query_text)
@@ -382,6 +382,7 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
         raise AnalysisPaused(analysis_id)
 
     state_diff = state.get("state_diff", {})
+    prior_verdict = cfg.get("prior_verdict")
     system_prompt = _jinja.get_template("gap_analyse_system.j2").render()
     user_prompt = _jinja.get_template("gap_analyse_user.j2").render(
         clause_id=clause_id,
@@ -390,6 +391,7 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
         state_diff_json=json.dumps(state_diff.get("state_diff", {}), indent=2),
         reference_context_json=json.dumps(state_diff.get("reference_context", {}), indent=2),
         evidence_chunks=state.get("evidence_text", ""),
+        prior_verdict=prior_verdict,
     )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
@@ -522,6 +524,11 @@ async def _persist_node(state: ClauseState, config: RunnableConfig) -> dict[str,
                 state.get("chunks", []), state.get("org_profile_map", {}), gap_result["citations"]
             ),
         }
+    # Provenance: the documents whose chunks were considered for this clause.
+    # Delta re-analysis uses this to detect verdicts invalidated by a removed doc.
+    gap_result["source_document_ids"] = sorted(
+        {c["document_id"] for c in state.get("chunks", []) if c.get("document_id")}
+    )
     await ResultStoreRepository(cfg["db"], cfg["tenant_id"]).upsert(
         cfg["analysis_id"], clause_id, gap_result
     )
@@ -637,8 +644,15 @@ async def analyse_clause(
     clause: dict[str, Any],
     on_thinking: Callable[[str], Awaitable[None]] | None = None,
     redis_client: Any = None,
+    prior_verdict: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Invoke the LangGraph clause pipeline. Returns the gap result dict."""
+    """Invoke the LangGraph clause pipeline. Returns the gap result dict.
+
+    ``prior_verdict`` (delta re-analysis only) is the clause's previous verdict; it
+    is shown to the gap_analyse LLM as *reference context* so it can explain what
+    changed. It never overrides grounding/reconciliation — the final decision is
+    still bound to the evidence actually retrieved this run.
+    """
     clause_id = clause.get("clause_id", "")
     if _LANGFUSE:
         try:
@@ -660,6 +674,7 @@ async def analyse_clause(
             "clause_id": clause.get("clause_id", ""),
             "redis_client": redis_client,
             "on_thinking": on_thinking,
+            "prior_verdict": prior_verdict,
         }
     }
     final_state: ClauseState = await _clause_graph.ainvoke(

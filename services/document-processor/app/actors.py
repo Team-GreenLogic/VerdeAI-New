@@ -7,6 +7,7 @@ from aio_pika import IncomingMessage
 from loguru import logger
 
 from verdeai_shared.messaging.connection import get_channel
+from verdeai_shared.db.repositories.chunks import ChunksRepository
 from verdeai_shared.db.repositories.hash_store import HashStoreRepository
 from verdeai_shared.messaging.events import DocumentDeleted, DocumentReady, DocumentUploaded
 from verdeai_shared.retrieval.bm25 import remove_document_from_bm25_index
@@ -81,6 +82,12 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
             {"$set": {"status": "ready"}},
         )
 
+        # If this upload is a modified version of an existing document (detected in
+        # stage 1 via same-filename + >50% CDC overlap), supersede the previous
+        # version: soft-delete its chunks and prune them from the BM25 index so
+        # retrieval only ever sees the latest version.
+        await _supersede_previous_version(db, tenant_id, document_id)
+
         # Publish DocumentReady event
         await _publish_ready(DocumentReady(
             tenant_id=tenant_id,
@@ -110,6 +117,40 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
             pass
         await emit(tenant_id, document_id, "complete", "failed", str(exc))
         raise
+
+
+async def _supersede_previous_version(db: object, tenant_id: str, document_id: str) -> None:
+    """Soft-delete the chunks of the document this upload replaces.
+
+    ``stage1_dedup._check_modified_version`` records ``previous_version_id`` on the
+    new document when it detects a modified re-upload. Once the new version is fully
+    processed and ready, the old version's chunks must stop being retrievable.
+    """
+    import bson
+
+    doc = await db.documents.find_one(  # type: ignore[attr-defined]
+        {"_id": bson.ObjectId(document_id), "tenant_id": tenant_id},
+        {"previous_version_id": 1},
+    )
+    prev_id = (doc or {}).get("previous_version_id")
+    if not prev_id:
+        return
+
+    chunk_ids = await ChunksRepository(db, tenant_id).supersede_document(prev_id, document_id)
+    if chunk_ids:
+        await remove_document_from_bm25_index(db, tenant_id, chunk_ids)
+
+    await db.documents.update_one(  # type: ignore[attr-defined]
+        {"_id": bson.ObjectId(prev_id), "tenant_id": tenant_id},
+        {"$set": {"status": "superseded", "superseded_by": document_id}},
+    )
+    logger.info(
+        "Superseded previous document version",
+        tenant_id=tenant_id,
+        document_id=document_id,
+        previous_version_id=prev_id,
+        chunks_superseded=len(chunk_ids),
+    )
 
 
 async def handle_document_deleted(message: IncomingMessage) -> None:

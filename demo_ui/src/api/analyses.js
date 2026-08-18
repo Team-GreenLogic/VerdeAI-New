@@ -39,3 +39,11 @@ export async function getMissingRequirements(id) {
 export async function downloadReport(id) {
   return apiGetBlob(`/analyses/${id}/report.pdf`)
 }
+
+export async function getStaleness(id) {
+  return apiGet(`/analyses/${id}/staleness`)
+}
+
+export async function reanalyzeDelta(id) {
+  return apiPost(`/analyses/${id}/reanalyze-delta`)
+}

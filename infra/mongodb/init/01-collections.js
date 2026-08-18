@@ -46,6 +46,8 @@ db.documents.createIndex({ tenant_id: 1, status: 1 }, { background: true });
 
 // chunks
 db.chunks.createIndex({ tenant_id: 1, document_id: 1 }, { background: true });
+db.chunks.createIndex({ tenant_id: 1, created_at: 1 }, { background: true });
+db.chunks.createIndex({ tenant_id: 1, superseded: 1, superseded_at: 1 }, { background: true });
 
 // bm25_indexes
 db.bm25_indexes.createIndex({ tenant_id: 1 }, { unique: true, background: true });

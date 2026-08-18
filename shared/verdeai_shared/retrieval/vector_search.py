@@ -1,5 +1,6 @@
 """MongoDB Atlas Vector Search aggregation helper."""
 
+from datetime import datetime
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase  # type: ignore[import-untyped]
@@ -13,12 +14,23 @@ async def vector_search_chunks(
     query_vector: list[float],
     top_k: int | None = None,
     document_id: str | None = None,
+    created_after: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Run $vectorSearch on the chunks collection filtered by tenant_id."""
+    """Run $vectorSearch on the chunks collection filtered by tenant_id.
+
+    Superseded chunks (older versions of a re-uploaded document) are always
+    excluded. When ``created_after`` is given, only chunks ingested after that
+    instant are returned — used by delta re-analysis to look at new evidence only.
+    """
     k = top_k or settings.RETRIEVAL_TOP_K
-    pre_filter: dict[str, Any] = {"tenant_id": {"$eq": tenant_id}}
+    pre_filter: dict[str, Any] = {
+        "tenant_id": {"$eq": tenant_id},
+        "superseded": {"$eq": False},
+    }
     if document_id:
         pre_filter["document_id"] = {"$eq": document_id}
+    if created_after is not None:
+        pre_filter["created_at"] = {"$gt": created_after}
 
     pipeline: list[dict[str, Any]] = [
         {
@@ -40,6 +52,7 @@ async def vector_search_chunks(
                 "text": 1,
                 "context_preamble": 1,
                 "content_type": 1,
+                "created_at": 1,
                 "score": {"$meta": "vectorSearchScore"},
             }
         },

@@ -1,5 +1,6 @@
 """Hybrid retrieval: vector + BM25 + RRF fusion + Voyage rerank."""
 
+from datetime import datetime
 from typing import Any
 
 from verdeai_shared.retrieval.reranker import rerank
@@ -19,16 +20,22 @@ async def hybrid_retrieve(
     query: str,
     query_vector: list[float],
     top_k: int | None = None,
+    created_after: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Run vector + BM25 retrieval and fuse with RRF, then rerank.
 
     Returns up to RERANK_TOP_K chunks sorted by rerank score.
+
+    When ``created_after`` is set, only chunks ingested after that instant survive
+    (delta re-analysis "new evidence only"). Superseded chunks are excluded
+    throughout: the vector filter drops them, they are pruned from the BM25 index
+    at supersession time, and the BM25-only DB fetch below re-checks defensively.
     """
     k = top_k or settings.RETRIEVAL_TOP_K
 
     # Parallel retrieval
     vector_results, bm25_results = await _run_both(
-        db, tenant_id, query, query_vector, k
+        db, tenant_id, query, query_vector, k, created_after
     )
 
     # Build RRF score map: {chunk_id: rrf_score}
@@ -50,11 +57,18 @@ async def hybrid_retrieve(
         str(c["_id"]): c for c in vector_results
     }
 
-    # Fetch BM25-only chunks from DB
+    # Fetch BM25-only chunks from DB (excluding superseded / pre-cutoff chunks so a
+    # stale BM25 index entry can't reintroduce content the vector filter dropped).
     missing_ids = bm25_id_set - set(chunk_map.keys())
     if missing_ids:
         from bson import ObjectId
-        cursor = db["chunks"].find({"_id": {"$in": [ObjectId(i) for i in missing_ids]}})
+        db_filter: dict[str, Any] = {
+            "_id": {"$in": [ObjectId(i) for i in missing_ids]},
+            "superseded": {"$ne": True},
+        }
+        if created_after is not None:
+            db_filter["created_at"] = {"$gt": created_after}
+        cursor = db["chunks"].find(db_filter)
         for doc in await cursor.to_list(length=None):
             chunk_map[str(doc["_id"])] = doc
 
@@ -83,10 +97,13 @@ async def _run_both(
     query: str,
     query_vector: list[float],
     k: int,
+    created_after: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Run vector and BM25 retrieval concurrently."""
     import asyncio
-    vector_task = asyncio.create_task(vector_search_chunks(db, tenant_id, query_vector, k))
+    vector_task = asyncio.create_task(
+        vector_search_chunks(db, tenant_id, query_vector, k, created_after=created_after)
+    )
     bm25_task = asyncio.create_task(bm25_search(db, tenant_id, query, k))
     vector_results, bm25_results = await asyncio.gather(vector_task, bm25_task)
     return vector_results, bm25_results

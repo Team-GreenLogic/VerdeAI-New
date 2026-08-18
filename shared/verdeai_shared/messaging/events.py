@@ -43,6 +43,12 @@ class AnalysisRequested(BaseModel):
     analysis_id: str
     scope: Literal["full"] | dict[str, list[str]]
     version_id: str = "iso-14001-2015"
+    # Delta re-analysis: when mode == "delta", the worker copies the parent
+    # analysis's verdicts forward and only re-runs clauses affected by evidence
+    # added or removed since ``baseline_at`` (the parent analysis's created_at).
+    mode: Literal["full", "delta"] = "full"
+    parent_analysis_id: str | None = None
+    baseline_at: datetime | None = None
 
 
 class AnalysisGapsReady(BaseModel):

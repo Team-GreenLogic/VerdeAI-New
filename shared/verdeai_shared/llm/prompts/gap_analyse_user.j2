@@ -11,7 +11,11 @@ Organisation profile reference values used in comparison:
 
 Supporting evidence chunks (ranked by relevance):
 {{ evidence_chunks }}
-
+{% if prior_verdict %}
+Previous verdict for this clause (from an earlier analysis — may now be outdated because documents have been added, modified, or removed). Use it only as reference; RE-JUDGE strictly against the "Supporting evidence chunks" shown above, which reflect the current documents:
+Previous decision: {{ prior_verdict.decision }}
+Previous reasoning: {{ prior_verdict.reasoning }}
+{% endif %}
 Required output schema:
 {
   "decision": "Met|Partially Met|Not Met|Insufficient Evidence",

@@ -79,6 +79,8 @@ async def _ensure_vector_index(db: object) -> None:
                         {"type": "filter", "path": "tenant_id"},
                         {"type": "filter", "path": "document_id"},
                         {"type": "filter", "path": "content_type"},
+                        {"type": "filter", "path": "superseded"},
+                        {"type": "filter", "path": "created_at"},
                     ]
                 },
             }

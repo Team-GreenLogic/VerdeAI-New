@@ -125,7 +125,7 @@ async def _check_modified_version(
             "tenant_id": tenant_id,
             "filename": filename,
             "_id": {"$ne": __import__("bson").ObjectId(document_id)},
-            "status": {"$nin": ["deleted", "deduped"]},
+            "status": {"$nin": ["deleted", "deduped", "superseded"]},
         },
         sort=[("created_at", -1)],
     )

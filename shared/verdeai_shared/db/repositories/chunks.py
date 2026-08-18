@@ -14,6 +14,9 @@ class ChunksRepository(BaseRepository):
         for chunk in chunks:
             chunk.setdefault("tenant_id", self._tenant_id)
             chunk.setdefault("created_at", now)
+            # New chunks are live by default; supersession flips this when a modified
+            # version of the document is uploaded (see supersede_document).
+            chunk.setdefault("superseded", False)
         result = await self._col.insert_many(chunks)
         return [str(oid) for oid in result.inserted_ids]
 
@@ -24,3 +27,25 @@ class ChunksRepository(BaseRepository):
     async def delete_by_document(self, document_id: str) -> int:
         result = await self._col.delete_many(self._filter({"document_id": document_id}))
         return result.deleted_count
+
+    async def supersede_document(self, document_id: str, new_document_id: str) -> list[str]:
+        """Soft-delete all live chunks of ``document_id`` because a modified version
+        (``new_document_id``) has replaced it. Superseded chunks are excluded from
+        retrieval but kept for audit/lineage. Returns the affected chunk ids so the
+        caller can prune the BM25 index."""
+        base = self._filter({"document_id": document_id, "superseded": {"$ne": True}})
+        cursor = self._col.find(base, {"_id": 1})
+        chunk_ids = [str(c["_id"]) async for c in cursor]
+        if not chunk_ids:
+            return []
+        await self._col.update_many(
+            base,
+            {
+                "$set": {
+                    "superseded": True,
+                    "superseded_at": datetime.now(timezone.utc),
+                    "superseded_by_document_id": new_document_id,
+                }
+            },
+        )
+        return chunk_ids

@@ -21,6 +21,10 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type
     # chunks
     await db.chunks.create_indexes([
         IndexModel([("tenant_id", ASCENDING), ("document_id", ASCENDING)]),
+        # Staleness detection: new chunks since an analysis baseline
+        IndexModel([("tenant_id", ASCENDING), ("created_at", ASCENDING)]),
+        # Staleness / delta: chunks superseded since an analysis baseline
+        IndexModel([("tenant_id", ASCENDING), ("superseded", ASCENDING), ("superseded_at", ASCENDING)]),
     ])
 
     # bm25_indexes
