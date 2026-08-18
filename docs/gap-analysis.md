@@ -231,39 +231,87 @@ concerns another ISO requirement must not be used to downgrade the current claus
 directly prevents satisfaction of the current clause's normative requirement. Do not convert
 every operational deficiency found in the evidence into a gap for the clause being assessed.
 
-ONGOING-PROCESS REQUIREMENTS
+ONGOING ACTIVITY vs DEMONSTRATED VIOLATION
 Where a requirement concerns an ongoing process such as continual improvement, monitoring,
 review, maintenance, or continual suitability, do not interpret the requirement as demanding
 that every related activity has been completed or every target has already been achieved.
 Assess whether the required process is established, operating, followed up, and producing
 evidence consistent with the requirement.
 
-GAP vs OPPORTUNITY
-Distinguish between:
-1. Compliance gap — evidence shows a normative requirement is not satisfied.
-2. Incomplete or ongoing activity — work is still progressing but does not prevent
-   satisfaction of the clause.
-3. Opportunity for improvement — the organisation could strengthen its process, but the
-   clause remains satisfied.
-Only category 1 may cause an "unmet" finding. Categories 2 and 3 must not automatically
-downgrade a clause.
+An open, future-dated or ongoing activity is not by itself evidence of nonconformity.
+HOWEVER, do NOT use this rule to excuse evidence showing that a mandatory requirement is
+already being violated. Distinguish:
+A. Ongoing improvement, requirement otherwise demonstrated -> may still be "satisfied".
+B. Partial implementation of an established process        -> "partial".
+C. Demonstrated violation of a mandatory requirement       -> "unmet".
 
-Decision taxonomy — apply strictly in this order:
-1. "Met" — After semantic adjudication against the normative requirement, every material
-   assertion is satisfied by the available evidence, and there is explicit evidence of
-   implementation where implementation is required.
-2. "Partially Met" — A material part of the normative requirement is demonstrably incomplete,
-   missing, or only partly implemented. Do NOT use "Partially Met" merely because:
-   - an objective has not yet reached its target,
-   - an improvement action is still open,
-   - a future action has a due date,
-   - some unrelated operational issue remains unresolved,
-   - the organisation has further opportunities for improvement.
-3. "Not Met" — One or more material assertions are not satisfied AND evidence actively
-   contradicts or refutes the claim (evidence exists but demonstrates non-compliance).
-4. "Insufficient Evidence" — The evidence base is too sparse to distinguish Met from Not Met.
-   Use this when evidence chunks are absent or do not address the clause — NOT as a proxy for
-   "Not Met". If the evidence chunks are empty, use this verdict, not "Not Met".
+DECISION ORDER — follow exactly, in this order. Stop at the first step that applies.
+
+Step 1 — EVIDENCE SUFFICIENCY
+Is there enough relevant evidence to determine compliance at all?
+If NO -> "Insufficient Evidence".
+If YES -> continue.
+"Insufficient Evidence" means the available evidence is genuinely inadequate to determine
+whether the requirement is satisfied or failed. Do NOT use it when the evidence already
+demonstrates incomplete implementation, missing competence, failure to perform a required
+activity, or a violated requirement — those are substantive findings, not evidence absence.
+
+Step 2 — DEMONSTRATED FAILURE
+Does credible evidence demonstrate that a mandatory requirement of THIS clause is actually
+violated or not implemented?
+If YES -> "Not Met".
+"Not Met" requires credible evidence of an actual failure of a mandatory requirement. Use it
+when evidence demonstrates that the required control, activity, competence, communication,
+process, or obligation is actually absent, failed, bypassed, or violated.
+Do NOT use "Not Met" merely because:
+- one document is incomplete,
+- one action is overdue,
+- one field is blank,
+- additional evidence would be helpful.
+If you decide "Not Met" you MUST record it: mark at least one finding "status": "unmet" with
+"material": true. A "Not Met" verdict with no material unmet finding will be rejected.
+
+Step 3 — COMPLETE SATISFACTION
+Are all material mandatory requirements of THIS clause demonstrated?
+If YES -> "Met".
+Positive evidence does not erase a material gap belonging to the SAME clause. Before returning
+"Met", check:
+- Are all material requirements demonstrated?
+- Does any evidence show a material same-clause gap?
+- Is any required part incomplete?
+If a material requirement of the same clause remains incomplete, return "Partially Met", not
+"Met". An unrelated gap, or a gap belonging to another clause, is ignored — a same-clause
+material gap is not.
+Do not conclude a requirement is satisfied merely because one example of successful
+implementation exists, if other evidence demonstrates failure of the same mandatory
+requirement. One successful communication does not mean all required external communication
+is compliant.
+
+Step 4 — PARTIAL IMPLEMENTATION
+Everything else. The requirement is substantially implemented but one or more material parts
+remain incomplete -> "Partially Met".
+Do NOT use "Partially Met" merely because an objective has not reached its target, an
+improvement action is still open, a future action has a due date, or the organisation has
+further opportunities for improvement.
+
+PARTIALLY MET vs NOT MET — the boundary
+"Partially Met": a required system or process exists and is functioning, but a material
+portion is incomplete or inconsistently implemented.
+"Not Met": evidence demonstrates failure of the core mandatory requirement, not merely a
+limited defect within an otherwise implemented system.
+
+PRESENCE OF CONTROLS IS NOT SUFFICIENT
+The presence of some compliant controls does NOT automatically make a clause Partially Met.
+If credible evidence demonstrates that a mandatory requirement of the current clause is
+actually violated, failed, absent where required, or not implemented for the relevant persons
+or activities, classify the affected finding as "unmet". A proven failure is different from an
+unfinished improvement activity.
+
+SETTING "material"
+"material" is meaningful only on findings whose status is "unmet".
+true  = this unmet assertion is a failure of the core mandatory requirement (Step 2).
+false = a limited defect inside an otherwise implemented system (Step 4).
+Every "Not Met" verdict must carry at least one unmet finding with "material": true.
 
 "findings" — one entry per assertion in the state comparison:
 - "req_id" MUST exactly match a field_path/req_id from the assertion-level state comparison.
@@ -273,6 +321,9 @@ Decision taxonomy — apply strictly in this order:
 - "citation_ids" lists the 1-based Chunk numbers (matching the numbering in "Supporting evidence
   chunks" below) that ground this specific finding. Leave empty only if no chunk evidence applies
   (e.g. the assertion is judged purely from org_profile data).
+- "material" is a boolean, meaningful only when "status" is "unmet" — see the severity test
+  above. true = a fundamental failure of a mandatory requirement, which fails the whole clause.
+  false = an isolated or limited deficiency within an otherwise established process.
 - Produce a finding for every assertion — do not skip any, do not invent extra ones.
 
 "missing_evidence":
@@ -300,16 +351,21 @@ Anti-hallucination constraints:
   above) — do not report "Met" if any finding is "unmet".
 
 FINAL ADJUDICATION CHECK
-Before assigning each finding:
+Per finding:
 1. Read the exact normative requirement for this clause.
 2. Identify what the organisation is actually required to demonstrate.
 3. Determine whether the evidence demonstrates that requirement.
 4. For every apparent gap, ask: "Is this item actually required for satisfaction of THIS clause?"
-5. If no, do not downgrade the finding because of it.
-6. Do not equate an unfinished improvement activity with failure of continual improvement.
-7. Do not equate failure to achieve every environmental target with failure of the EMS
+   If no, do not downgrade the finding because of it.
+5. Do not equate an unfinished improvement activity with failure of continual improvement, and
+   do not equate failure to achieve every environmental target with failure of the EMS
    requirement unless the normative text requires it.
-8. Treat state_diff as preliminary evidence mapping, not as the final compliance judgement.
+6. Treat state_diff as preliminary evidence mapping, not as the final compliance judgement.
+7. For each "unmet" finding, set "material": failure of the core mandatory requirement = true;
+   limited defect inside an otherwise implemented system = false.
+
+Then, for the clause decision, walk the DECISION ORDER above from Step 1 and stop at the first
+step that applies. Do not pick a decision first and justify it afterwards.
 
 Output ONLY valid JSON. No prose, no markdown fences, no explanation outside the JSON object.
 ```
@@ -429,12 +485,42 @@ the verdict is abandoned in favour of Insufficient Evidence rather than persiste
 ### Decision re-derivation (`reconcile_decision`)
 
 ```
-all findings satisfied                       → Met
-any satisfied + any partial/unmet            → Partially Met
-any partial                                  → Partially Met
-all unmet, grounded chunk citations > 0      → Not Met
-all unmet, no grounded chunk citations       → Insufficient Evidence
+Step 2: any unmet finding with material=true → Not Met  (Insufficient Evidence if no grounded chunks)
+Step 3: all findings satisfied               → Met
+Step 4: anything else                        → Partially Met
 ```
+
+`material` is set by the analyser on `unmet` findings only: `true` = a fundamental failure of a
+mandatory requirement, which fails the whole clause; `false` = an isolated deficiency inside an
+otherwise established process. Without it, `Not Met` required *every* finding to be unmet —
+unreachable for any clause with more than one sub-requirement, which is why Not Met recall was
+zero on the benchmark.
+
+This mirrors the DECISION ORDER in `gap_analyse_system.j2` step for step, so prompt and code
+cannot disagree. Step 1 (evidence sufficiency) is handled upstream — `_route_after_grade`
+abstains below `MIN_RELEVANT_CHUNKS`, and `reconcile_decision` short-circuits on empty findings.
+
+`check_deterministic_grounding` additionally rejects a `Not Met` verdict that carries no
+`unmet` finding with `material: true`, routing it into the repair loop rather than letting
+reconciliation silently downgrade it.
+
+### Parent-clause aggregation (`pipeline/aggregation.py`)
+
+Clauses are analysed independently, so a parent can be scored more leniently than its own
+children. After every verdict is persisted — and before `gap_count` is finalised or
+`analyses.gaps.ready` is published — `aggregate_parent_decisions` overwrites each parent from
+its children, worst-child-wins:
+
+```
+any child Not Met               → parent Not Met
+else any Insufficient Evidence  → parent Insufficient Evidence
+else any Partially Met          → parent Partially Met
+else                            → parent Met
+```
+
+Parents are resolved deepest-first so multi-level hierarchies compose. Unrecognised decisions
+(e.g. `Error`) count as Insufficient Evidence — never as Met. It runs over the full result set,
+so delta re-runs also re-derive parents that were copied forward rather than re-analysed.
 
 If the derived decision disagrees with the LLM's, **the derived decision wins**, confidence
 is capped at 0.5, and a `[Reconciliation note: ...]` is appended to the reasoning.

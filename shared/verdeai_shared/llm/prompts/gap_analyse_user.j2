@@ -25,6 +25,8 @@ Required output schema:
     {
       "req_id": "<field_path from the assertion-level state comparison>",
       "status": "satisfied|partial|unmet",
+      "material": <true|false — true ONLY when status is "unmet" and the failure is a
+                   fundamental breach of a mandatory requirement (fails the whole clause)>,
       "citation_ids": [<1-based Chunk numbers grounding this finding>],
       "notes": "<one sentence justifying this finding>"
     }

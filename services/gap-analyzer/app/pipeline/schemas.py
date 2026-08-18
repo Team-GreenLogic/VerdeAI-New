@@ -51,6 +51,13 @@ class SubRequirementFinding(BaseModel):
     status: FindingStatus
     citation_ids: list[int] = Field(default_factory=list)
     notes: str = ""
+    material: bool = False
+    """True only when ``status`` is "unmet" AND the unfulfilled requirement is mandatory for
+    this clause — a demonstrated failure that fails the clause outright, as opposed to an
+    isolated defect or a partially-complete implementation. Drives the Not Met branch in
+    ``validation._derive_decision_from_findings``; without it, Not Met is unreachable for any
+    clause with more than one finding.
+    """
 
 
 class GapVerdict(BaseModel):

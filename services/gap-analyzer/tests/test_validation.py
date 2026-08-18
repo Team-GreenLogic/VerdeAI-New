@@ -154,14 +154,82 @@ def test_reconcile_decision_overrides_llm_when_findings_disagree():
     assert "Reconciled" in result["note"]
 
 
-def test_reconcile_decision_all_unmet_no_evidence_is_insufficient():
-    findings = [SubRequirementFinding(req_id="9.2.1-1", status="unmet", citation_ids=[])]
+def test_reconcile_decision_material_unmet_fails_whole_clause():
+    """The 7.2 shape: most assertions hold, but one mandatory requirement is provably
+    violated. Before `material` existed this derived Partially Met, making Not Met
+    unreachable for any multi-finding clause."""
+    findings = [
+        SubRequirementFinding(req_id="7.2-1", status="satisfied"),
+        SubRequirementFinding(req_id="7.2-2", status="unmet", material=True),
+        SubRequirementFinding(req_id="7.2-3", status="partial"),
+    ]
+    out = reconcile_decision(findings, "Partially Met", 0.85, grounded_chunk_count=4)
+    assert out["decision"] == "Not Met"
+
+
+def test_reconcile_decision_non_material_unmet_stays_partial():
+    """The 7.5.2 shape: an isolated defect inside an otherwise established process
+    must not fail the whole clause."""
+    findings = [
+        SubRequirementFinding(req_id="7.5.2-1", status="satisfied"),
+        SubRequirementFinding(req_id="7.5.2-2", status="unmet", material=False),
+    ]
+    out = reconcile_decision(findings, "Partially Met", 0.8, grounded_chunk_count=3)
+    assert out["decision"] == "Partially Met"
+
+
+def test_reconcile_decision_material_unmet_without_evidence_is_insufficient():
+    """A material failure still needs grounded evidence behind it."""
+    findings = [SubRequirementFinding(req_id="8.1-1", status="unmet", material=True)]
+    out = reconcile_decision(findings, "Not Met", 0.9, grounded_chunk_count=0)
+    assert out["decision"] == "Insufficient Evidence"
+
+
+def test_reconcile_decision_material_unmet_no_evidence_is_insufficient():
+    findings = [SubRequirementFinding(req_id="9.2.1-1", status="unmet", material=True, citation_ids=[])]
     result = reconcile_decision(findings, llm_decision="Not Met", llm_confidence=0.7, grounded_chunk_count=0)
     assert result["decision"] == "Insufficient Evidence"
 
 
-def test_reconcile_decision_all_unmet_with_evidence_is_not_met():
-    findings = [SubRequirementFinding(req_id="9.2.1-1", status="unmet", citation_ids=[1])]
+def test_reconcile_decision_material_unmet_with_evidence_is_not_met():
+    findings = [SubRequirementFinding(req_id="9.2.1-1", status="unmet", material=True, citation_ids=[1])]
     result = reconcile_decision(findings, llm_decision="Not Met", llm_confidence=0.7, grounded_chunk_count=2)
     assert result["decision"] == "Not Met"
     assert result["note"] is None
+
+
+def test_reconcile_decision_lone_non_material_unmet_is_partial():
+    """The 4.2 / 7.5.2 shape. A single unmet finding that the analyser judged a limited
+    defect must not fail the whole clause — deriving Not Met here produced the two false
+    Not Met positives on the benchmark."""
+    findings = [SubRequirementFinding(req_id="7.5.2-1", status="unmet", material=False, citation_ids=[1])]
+    result = reconcile_decision(findings, llm_decision="Not Met", llm_confidence=0.7, grounded_chunk_count=2)
+    assert result["decision"] == "Partially Met"
+
+
+def test_deterministic_grounding_rejects_not_met_without_material_finding():
+    """Step 2 of the decision order must be recorded on a finding, otherwise the verdict
+    would be silently downgraded by reconciliation instead of repaired."""
+    verdict = GapVerdict(
+        decision="Not Met",
+        confidence=0.8,
+        reasoning="Chunk 1 shows the required training was never delivered.",
+        findings=[SubRequirementFinding(req_id="7.2-1", status="unmet", material=False)],
+        citations=[Citation(type="chunk", chunk_id="Chunk 1")],
+    )
+    passed, reasons = check_deterministic_grounding(verdict, num_chunks=3)
+    assert passed is False
+    assert any("material=true" in r for r in reasons)
+
+
+def test_deterministic_grounding_accepts_not_met_with_material_finding():
+    verdict = GapVerdict(
+        decision="Not Met",
+        confidence=0.8,
+        reasoning="Chunk 1 shows the required training was never delivered.",
+        findings=[SubRequirementFinding(req_id="7.2-1", status="unmet", material=True)],
+        citations=[Citation(type="chunk", chunk_id="Chunk 1")],
+    )
+    passed, reasons = check_deterministic_grounding(verdict, num_chunks=3)
+    assert passed is True
+    assert reasons == []

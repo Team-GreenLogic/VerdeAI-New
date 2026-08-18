@@ -25,8 +25,6 @@ _MIN_GROUNDED_CHUNKS_FOR_HIGH_CONFIDENCE = 2
 # "Insufficient Evidence" is the only exemption — by definition it has nothing to cite.
 _DECISIONS_REQUIRING_CITATIONS = {"Met", "Not Met", "Partially Met"}
 
-_STATUS_RANK = {"satisfied": 2, "partial": 1, "unmet": 0}
-
 
 def resolve_citation_chunk_index(chunk_id: str | None) -> int | None:
     """Extract the 0-based chunk index from an LLM-authored chunk_id like "Chunk 3".
@@ -90,6 +88,16 @@ def check_deterministic_grounding(verdict: GapVerdict, num_chunks: int) -> tuple
             f"Decision '{verdict.decision}' requires at least one grounded citation, found none."
         )
 
+    # Step 2 of the decision order requires the failure to be recorded on a finding. Without
+    # this, a "Not Met" with no material finding is silently downgraded by reconciliation;
+    # failing here instead routes it into the bounded repair loop so the model can fix it.
+    if verdict.decision == "Not Met" and not any(
+        f.status == "unmet" and f.material for f in verdict.findings
+    ):
+        reasons.append(
+            "Decision 'Not Met' requires at least one finding with status='unmet' and material=true."
+        )
+
     fabricated = {n for n in extract_cited_chunk_numbers(verdict.reasoning) if not (1 <= n <= num_chunks)}
     if fabricated:
         reasons.append(f"Reasoning references non-existent chunk(s): {sorted(fabricated)}")
@@ -105,15 +113,24 @@ def clamp_confidence_for_evidence(confidence: float, grounded_chunk_count: int) 
 
 
 def _derive_decision_from_findings(findings: list[SubRequirementFinding], grounded_chunk_count: int) -> str:
-    statuses = [f.status for f in findings]
-    if all(s == "satisfied" for s in statuses):
+    """Mirrors the DECISION ORDER in ``gap_analyse_system.j2``.
+
+    Prompt and code express the same four steps, so the deterministic override acts as a
+    safety net rather than contradicting the procedure the model was told to follow.
+
+    Step 1 (evidence sufficiency) is handled upstream — ``_route_after_grade`` abstains below
+    ``MIN_RELEVANT_CHUNKS``, and ``reconcile_decision`` short-circuits on empty findings.
+    """
+    # Step 2 — a mandatory requirement demonstrably failed. Fails the clause outright,
+    # however many sibling assertions are satisfied.
+    if any(f.status == "unmet" and f.material for f in findings):
+        return "Not Met" if grounded_chunk_count > 0 else "Insufficient Evidence"
+    # Step 3 — everything demonstrated.
+    if all(f.status == "satisfied" for f in findings):
         return "Met"
-    if any(s == "satisfied" for s in statuses) and any(s in ("partial", "unmet") for s in statuses):
-        return "Partially Met"
-    if any(s == "partial" for s in statuses):
-        return "Partially Met"
-    # every finding unmet
-    return "Not Met" if grounded_chunk_count > 0 else "Insufficient Evidence"
+    # Step 4 — default. A non-material unmet finding is a limited defect, not a clause
+    # failure: deriving Not Met from it produced the false positives on 4.2 and 7.5.2.
+    return "Partially Met"
 
 
 def reconcile_decision(

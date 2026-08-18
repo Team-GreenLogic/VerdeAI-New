@@ -20,6 +20,7 @@ from verdeai_shared.pipeline.recommendations import generate_recommendations
 from verdeai_shared.retrieval.embedder import embed_query
 from verdeai_shared.retrieval.hybrid import hybrid_retrieve
 
+from app.pipeline.aggregation import aggregate_parent_decisions
 from app.pipeline.analyse_clause import AnalysisPaused, analyse_clause, build_query_text
 from app.progress import emit
 
@@ -257,12 +258,54 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                     redis_client=redis,
                 )
 
+        # ── Parent-clause aggregation ────────────────────────────────────────────
+        # Each clause is analysed independently, so a parent can end up scored more
+        # leniently than its own children. Derive parents deterministically from their
+        # children before anything downstream reads the verdicts. Uses the full result
+        # set (not just to_process_ids) so a delta run also re-derives parents that were
+        # copied forward rather than re-analysed.
+        all_results = await ResultStoreRepository(db, tenant_id).list_for_analysis(analysis_id)
+        parent_updates = aggregate_parent_decisions(all_results)
+        if parent_updates:
+            by_clause = {r["clause_id"]: r for r in all_results if r.get("clause_id")}
+            for cid, new_decision in parent_updates.items():
+                previous = by_clause[cid].get("decision", "Unknown")
+                note = (
+                    chr(10) * 2
+                    + f"[Parent aggregation: derived '{new_decision}' from sub-clause "
+                    + f"verdicts; independent analysis of this clause said '{previous}'.]"
+                )
+                await ResultStoreRepository(db, tenant_id).upsert(
+                    analysis_id, cid,
+                    {"decision": new_decision,
+                     "reasoning": (by_clause[cid].get("reasoning", "") + note)},
+                )
+                by_clause[cid]["decision"] = new_decision
+                logger.info("Parent clause aggregated", clause_id=cid,
+                            was=previous, now=new_decision)
+
+                # In-loop generation already ran under the pre-aggregation decision, and the
+                # gaps.ready consumers skip Met / Insufficient Evidence — so nothing else
+                # would ever clean these up.
+                if new_decision in ("Met", "Insufficient Evidence"):
+                    await db.recommendation_store.delete_many(
+                        {"tenant_id": tenant_id, "analysis_id": analysis_id, "clause_id": cid}
+                    )
+                if new_decision == "Met":
+                    await db.missing_request_store.delete_many(
+                        {"tenant_id": tenant_id, "analysis_id": analysis_id, "clause_id": cid}
+                    )
+
+            # The in-loop accumulator counted pre-aggregation decisions.
+            gap_count = sum(1 for r in by_clause.values() if r.get("decision") != "Met")
+
         logger.info(
             "Gap analysis complete",
             tenant_id=tenant_id,
             analysis_id=analysis_id,
             clauses=total,
             gaps=gap_count,
+            parents_aggregated=len(parent_updates),
         )
 
         await db.analyses.update_one(
