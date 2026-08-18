@@ -5,12 +5,16 @@ Populates:
   - iso_state_template (3 state fields per clause)
   - org_profile        (blank entries for demo tenant)
   - iso_clauses_vector_idx  (Atlas Vector Search index)
+  - the benchmark version (``data/benchmark_clauses.json``) as a separate
+    published ISO version — see ``seed_benchmark_version``
 
 Safe to re-run — all writes are idempotent upserts.
 """
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -537,10 +541,19 @@ async def seed_clauses(db: Any, version_id: str = DEFAULT_VERSION_ID) -> None:
         logger.info("Upserted clause", clause_id=clause["clause_id"], version_id=version_id)
 
 
-async def seed_state_template(db: Any, version_id: str = DEFAULT_VERSION_ID) -> None:
-    """Upsert 3 state template fields for each clause (96 total)."""
+async def seed_state_template(
+    db: Any,
+    version_id: str = DEFAULT_VERSION_ID,
+    clauses: list[dict[str, Any]] | None = None,
+) -> None:
+    """Upsert 3 state template fields for each clause (96 total).
+
+    ``clauses`` defaults to the built-in ``CLAUSES`` catalog; pass an explicit list
+    to build a template for a different clause set (e.g. the benchmark version).
+    """
     repo = ISOStateRepository(db)
-    for clause in CLAUSES:
+    items = CLAUSES if clauses is None else clauses
+    for clause in items:
         cid = clause["clause_id"]
         for field in _STATE_FIELDS:
             await repo.upsert({
@@ -551,7 +564,7 @@ async def seed_state_template(db: Any, version_id: str = DEFAULT_VERSION_ID) -> 
                 "field_type": field["field_type"],
                 "default": field["default"],
             })
-    logger.info("State template seeded", clauses=len(CLAUSES), fields_per_clause=len(_STATE_FIELDS), version_id=version_id)
+    logger.info("State template seeded", clauses=len(items), fields_per_clause=len(_STATE_FIELDS), version_id=version_id)
 
 
 async def seed_org_profile(db: Any, tenant_id: str, version_id: str = DEFAULT_VERSION_ID) -> None:
@@ -571,6 +584,68 @@ async def seed_org_profile(db: Any, tenant_id: str, version_id: str = DEFAULT_VE
                 upsert=True,
             )
     logger.info("Org profile seeded for demo tenant", tenant_id=tenant_id, version_id=version_id)
+
+
+# ---------------------------------------------------------------------------
+# Benchmark version — reference clause set loaded from JSON
+# ---------------------------------------------------------------------------
+
+BENCHMARK_VERSION_ID = "iso-14001-benchmark"
+BENCHMARK_VERSION_NAME = "ISO 14001 Benchmark"
+_BENCHMARK_FILE = Path(__file__).parent / "data" / "benchmark_clauses.json"
+
+
+def load_benchmark_clauses() -> list[dict[str, Any]]:
+    """Read the benchmark clause set from disk.
+
+    The file carries its own ``version_id`` from whichever build exported it; that
+    is stripped here so the clauses always land under ``BENCHMARK_VERSION_ID``.
+    """
+    if not _BENCHMARK_FILE.exists():
+        logger.warning("Benchmark clause file not found — skipping", path=str(_BENCHMARK_FILE))
+        return []
+
+    raw: list[dict[str, Any]] = json.loads(_BENCHMARK_FILE.read_text(encoding="utf-8"))
+    return [{k: v for k, v in clause.items() if k != "version_id"} for clause in raw]
+
+
+async def seed_benchmark_version(db: Any) -> None:
+    """Upsert the benchmark clause set as its own published ISO version.
+
+    Kept separate from the default seed so gap-analysis runs can be pointed at a
+    fixed reference clause set. Idempotent: skips the embed step when the clauses
+    are already present.
+    """
+    clauses = load_benchmark_clauses()
+    if not clauses:
+        return
+
+    await ISOVersionsRepository(db).upsert({
+        "version_id": BENCHMARK_VERSION_ID,
+        "name": BENCHMARK_VERSION_NAME,
+        "description": "Reference ISO 14001 clause set used as the gap-analysis benchmark",
+        "status": "published",
+        "source": "benchmark",
+        "clause_count": len(clauses),
+        "created_by": "system",
+    })
+
+    existing = await db.iso_clauses.count_documents({"version_id": BENCHMARK_VERSION_ID})
+    if existing >= len(clauses):
+        logger.info("Benchmark clauses already seeded — skipping embed", count=existing)
+        return
+
+    # Same embedding formula as seed_clauses / the AI build pipeline.
+    texts = [f"{c.get('title', '')}\n{c.get('requirements', '')}" for c in clauses]
+    logger.info("Embedding benchmark clauses", count=len(texts), version_id=BENCHMARK_VERSION_ID)
+    embeddings = await embed_documents(texts)
+
+    repo = ISOClausesRepository(db)
+    for clause, emb in zip(clauses, embeddings):
+        await repo.upsert({**clause, "version_id": BENCHMARK_VERSION_ID, "embedding": emb})
+
+    await seed_state_template(db, BENCHMARK_VERSION_ID, clauses=clauses)
+    logger.info("Benchmark version seeded", version_id=BENCHMARK_VERSION_ID, clauses=len(clauses))
 
 
 async def _backfill_version_id(db: Any) -> None:
@@ -603,6 +678,10 @@ async def run_seed(demo_tenant_id: str) -> None:
         "created_by": "system",
     })
     logger.info("Default ISO version upserted", version_id=DEFAULT_VERSION_ID)
+
+    # Before the early-return below — that only guards the *default* clause set,
+    # so the benchmark would never seed on an already-seeded database.
+    await seed_benchmark_version(db)
 
     existing = await db.iso_clauses.count_documents({"version_id": DEFAULT_VERSION_ID})
     if existing >= len(CLAUSES):

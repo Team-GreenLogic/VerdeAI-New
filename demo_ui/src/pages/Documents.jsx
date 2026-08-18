@@ -86,17 +86,27 @@ export default function Documents() {
     init()
   }, [])
 
-  async function handleFiles(files) {
-    const file = files[0]
-    if (!file) return
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList || [])
+    if (files.length === 0) return
     setUploading(true)
+    // Sequential rather than parallel: each upload kicks off its own processing
+    // job, and one rejected file shouldn't abort the rest of the batch.
+    const failed = []
     try {
-      const res = await uploadDocument(file)
-      setActiveJobs(j => [...j, { jobId: res.document_id, filename: file.name }])
-    } catch (err) {
-      alert(err.message)
+      for (const file of files) {
+        try {
+          const res = await uploadDocument(file)
+          setActiveJobs(j => [...j, { jobId: res.document_id, filename: file.name }])
+        } catch (err) {
+          failed.push(`${file.name}: ${err.message}`)
+        }
+      }
     } finally {
       setUploading(false)
+    }
+    if (failed.length > 0) {
+      alert(`Upload failed for ${failed.length} of ${files.length} file(s):\n\n${failed.join('\n')}`)
     }
   }
 
@@ -104,6 +114,11 @@ export default function Documents() {
     e.preventDefault()
     setDragOver(false)
     handleFiles(e.dataTransfer.files)
+  }
+
+  async function handleFileInput(e) {
+    await handleFiles(e.target.files)
+    e.target.value = ''  // allow re-selecting the same file
   }
 
   async function handleDelete(id) {
@@ -144,8 +159,9 @@ export default function Documents() {
           ref={fileRef}
           type="file"
           className="hidden"
+          multiple
           accept=".pdf,.docx,.txt,.xlsx,.pptx"
-          onChange={e => handleFiles(e.target.files)}
+          onChange={handleFileInput}
         />
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
@@ -158,8 +174,8 @@ export default function Documents() {
               <UploadSVG />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-700">Drop a file here or click to upload</p>
-              <p className="text-xs text-slate-400 mt-1">Max 100 MB</p>
+              <p className="text-sm font-semibold text-slate-700">Drop files here or click to upload</p>
+              <p className="text-xs text-slate-400 mt-1">Multiple files supported · Max 100 MB each</p>
             </div>
             <div className="flex gap-1.5 flex-wrap justify-center">
               {FORMATS.map(f => (
