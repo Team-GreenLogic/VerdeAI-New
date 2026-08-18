@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { listAnalyses, createAnalysis, getVersions, getStaleness, reanalyzeDelta } from '../api/analyses.js'
+import { listAnalyses, createAnalysis, deleteAnalysis, getVersions, getStaleness, reanalyzeDelta } from '../api/analyses.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 import StalenessBanner from '../components/StalenessBanner.jsx'
@@ -25,6 +25,7 @@ export default function AnalysisListPage() {
   const [selectedVersion, setSelectedVersion] = useState(DEFAULT_VERSION_ID)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
   const [staleness, setStaleness] = useState(null)
   const [reanalyzing, setReanalyzing] = useState(false)
   const navigate = useNavigate()
@@ -39,6 +40,23 @@ export default function AnalysisListPage() {
     setVersions(vlist)
     if (vlist.length > 0 && !vlist.find(v => v.version_id === selectedVersion)) {
       setSelectedVersion(vlist[0].version_id)
+    }
+  }
+
+  async function handleDelete(analysisId, e) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!window.confirm('Are you sure you want to delete this analysis report? This action cannot be undone.')) {
+      return
+    }
+    setDeletingId(analysisId)
+    try {
+      await deleteAnalysis(analysisId)
+      setAnalyses(prev => prev.filter(a => a.analysis_id !== analysisId))
+    } catch (err) {
+      alert(err.message || 'Failed to delete analysis')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -269,12 +287,28 @@ export default function AnalysisListPage() {
                     {new Date(a.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      to={`/analyses/${a.analysis_id}`}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-md px-2.5 py-1 transition-colors"
-                    >
-                      View →
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        to={`/analyses/${a.analysis_id}`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-md px-2.5 py-1.5 transition-colors"
+                      >
+                        View →
+                      </Link>
+                      <button
+                        onClick={(e) => handleDelete(a.analysis_id, e)}
+                        disabled={deletingId === a.analysis_id}
+                        title="Delete this analysis report"
+                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors cursor-pointer"
+                      >
+                        {deletingId === a.analysis_id ? (
+                          <Spinner size="sm" />
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

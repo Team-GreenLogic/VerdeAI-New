@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  getAnalysis, pauseAnalysis, resumeAnalysis,
+  getAnalysis, pauseAnalysis, resumeAnalysis, deleteAnalysis,
   getResults, getRecommendations, getMissingRequirements, downloadReport,
   getStaleness, reanalyzeDelta,
 } from '../api/analyses.js'
@@ -341,50 +341,228 @@ function GapResultsTab({ analysisId, version }) {
 }
 
 // ── Recommendations Tab ──────────────────────────────────────────────────────
-function RecommendationsTab({ analysisId, version }) {
-  const [recs, setRecs] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getRecommendations(analysisId).then(r => { setRecs(r || []); setLoading(false) })
-  }, [analysisId, version])
-
-  if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
-  if (!recs.length) return <p className="text-sm text-slate-400 py-6">No recommendations yet. Run and complete an analysis first.</p>
-
-  const byClause = recs.reduce((acc, r) => {
-    ;(acc[r.clause_id] = acc[r.clause_id] || []).push(r); return acc
-  }, {})
-
+function RecommendationCard({ rec, rank, activeSort, showClauseBadge = false }) {
   function Stars({ n, max = 5, color = 'text-amber-400' }) {
+    const validN = Math.max(0, Math.min(max, Number(n) || 0))
     return (
-      <span className={color}>
-        {'★'.repeat(n)}{'☆'.repeat(max - n)}
+      <span className={`${color} font-mono tracking-tighter`} title={`${validN}/${max}`}>
+        {'★'.repeat(validN)}{'☆'.repeat(max - validN)}
       </span>
     )
   }
 
   return (
+    <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 hover:border-brand-300 hover:shadow-md transition-all duration-200 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+          {rank != null && (
+            <span className="font-mono text-xs font-bold text-slate-400 bg-slate-100 rounded-md px-1.5 py-0.5 flex-shrink-0 mt-0.5">
+              #{rank}
+            </span>
+          )}
+          {showClauseBadge && (
+            <span className="font-mono text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200 rounded-md px-2 py-0.5 flex-shrink-0 mt-0.5">
+              Clause {rec.clause_id}
+            </span>
+          )}
+          <p className="text-sm text-slate-800 leading-relaxed flex-1">{rec.text}</p>
+        </div>
+      </div>
+
+      {/* Metric Badges */}
+      <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100 text-xs">
+        {/* Impact */}
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all ${
+          activeSort === 'impact'
+            ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-400 font-semibold shadow-xs'
+            : 'bg-emerald-50 text-emerald-700 border border-emerald-200/70'
+        }`}>
+          <span className="text-[11px] uppercase tracking-wide">Impact</span>
+          <Stars n={rec.impact} color={activeSort === 'impact' ? 'text-emerald-600' : 'text-emerald-500'} />
+          <span className="text-[11px] font-bold">({rec.impact ?? 0}/5)</span>
+        </div>
+
+        {/* Cost */}
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all ${
+          activeSort === 'cost'
+            ? 'bg-rose-100 text-rose-800 border-2 border-rose-400 font-semibold shadow-xs'
+            : 'bg-rose-50 text-rose-700 border border-rose-200/70'
+        }`}>
+          <span className="text-[11px] uppercase tracking-wide">Cost</span>
+          <Stars n={rec.cost} color={activeSort === 'cost' ? 'text-rose-600' : 'text-rose-400'} />
+          <span className="text-[11px] font-bold">({rec.cost ?? 0}/5)</span>
+        </div>
+
+        {/* Effort */}
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all ${
+          activeSort === 'effort'
+            ? 'bg-indigo-100 text-indigo-800 border-2 border-indigo-400 font-semibold shadow-xs'
+            : 'bg-indigo-50 text-indigo-700 border border-indigo-200/70'
+        }`}>
+          <span className="text-[11px] uppercase tracking-wide">Effort</span>
+          <strong className="text-slate-800 font-mono text-[12px]">{rec.effort_weeks ?? 0}w</strong>
+          <span className="text-[10px] text-slate-500">({(rec.effort_weeks ?? 0) * 5}d)</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RecommendationsTab({ analysisId, version }) {
+  const [recs, setRecs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [sortBy, setSortBy] = useState('clause') // 'clause' | 'cost' | 'effort' | 'impact'
+  const [sortOrder, setSortOrder] = useState('asc') // 'asc' | 'desc'
+
+  useEffect(() => {
+    getRecommendations(analysisId).then(r => { setRecs(r || []); setLoading(false) })
+  }, [analysisId, version])
+
+  function handleSortChange(newSort) {
+    if (sortBy === newSort) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(newSort)
+      if (newSort === 'impact') {
+        setSortOrder('desc')
+      } else if (newSort === 'cost' || newSort === 'effort') {
+        setSortOrder('asc')
+      } else {
+        setSortOrder('asc')
+      }
+    }
+  }
+
+  const sortedRecs = useMemo(() => {
+    const list = [...recs]
+    const dir = sortOrder === 'asc' ? 1 : -1
+
+    return list.sort((a, b) => {
+      if (sortBy === 'cost') {
+        const diff = ((a.cost ?? 0) - (b.cost ?? 0)) * dir
+        if (diff !== 0) return diff
+        return compareClauseIds(a.clause_id, b.clause_id)
+      }
+      if (sortBy === 'effort') {
+        const diff = ((a.effort_weeks ?? 0) - (b.effort_weeks ?? 0)) * dir
+        if (diff !== 0) return diff
+        return compareClauseIds(a.clause_id, b.clause_id)
+      }
+      if (sortBy === 'impact') {
+        const diff = ((a.impact ?? 0) - (b.impact ?? 0)) * dir
+        if (diff !== 0) return diff
+        return compareClauseIds(a.clause_id, b.clause_id)
+      }
+      // default: clause
+      return compareClauseIds(a.clause_id, b.clause_id) * dir
+    })
+  }, [recs, sortBy, sortOrder])
+
+  if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+  if (!recs.length) return <p className="text-sm text-slate-400 py-6">No recommendations yet. Run and complete an analysis first.</p>
+
+  const isGrouped = sortBy === 'clause'
+
+  // When grouped by clause
+  const byClause = sortedRecs.reduce((acc, r) => {
+    ;(acc[r.clause_id] = acc[r.clause_id] || []).push(r); return acc
+  }, {})
+
+  const sortedClauseKeys = Object.keys(byClause).sort((a, b) => {
+    return compareClauseIds(a, b) * (sortOrder === 'asc' ? 1 : -1)
+  })
+
+  return (
     <div className="space-y-5">
-      {Object.entries(byClause).sort(([a], [b]) => compareClauseIds(a, b)).map(([clauseId, items]) => (
-        <div key={clauseId}>
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            Clause {clauseId}
-          </h4>
-          <div className="space-y-3">
-            {items.map((rec, i) => (
-              <div key={i} className="rounded-xl bg-white border border-slate-200 shadow-sm p-4">
-                <p className="text-sm text-slate-800 mb-3">{rec.text}</p>
-                <div className="flex flex-wrap gap-4 text-xs text-slate-500">
-                  <span>Cost: <Stars n={rec.cost} color="text-red-400" /></span>
-                  <span>Impact: <Stars n={rec.impact} color="text-brand-500" /></span>
-                  <span>Effort: <strong className="text-slate-700">{rec.effort_weeks}w</strong></span>
-                </div>
-              </div>
-            ))}
+      {/* Sorting Toolbar */}
+      <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+              Sort by:
+            </span>
+
+            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
+              {[
+                { key: 'clause', label: 'Clause' },
+                { key: 'impact', label: 'Impact' },
+                { key: 'cost', label: 'Cost' },
+                { key: 'effort', label: 'Effort' },
+              ].map(opt => {
+                const isActive = sortBy === opt.key
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => handleSortChange(opt.key)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isActive
+                        ? 'bg-brand-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    {opt.label}
+                    {isActive && (
+                      <span className="text-[10px] opacity-90 font-mono">
+                        {sortOrder === 'asc' ? '▲' : '▼'}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors shadow-xs cursor-pointer"
+              title="Toggle sort direction"
+            >
+              <span>Order:</span>
+              <strong className="text-slate-800">
+                {sortBy === 'clause'
+                  ? (sortOrder === 'asc' ? 'Clause (4.1 → 10.3)' : 'Clause (10.3 → 4.1)')
+                  : (sortOrder === 'desc' ? 'Highest First (High → Low)' : 'Lowest First (Low → High)')}
+              </strong>
+              <span className="text-slate-400 font-mono">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+            </button>
           </div>
         </div>
-      ))}
+      </div>
+
+      {/* Render Recommendations List */}
+      {isGrouped ? (
+        /* Grouped by clause */
+        <div className="space-y-6">
+          {sortedClauseKeys.map((clauseId) => (
+            <div key={clauseId} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200 rounded-md px-2 py-0.5">
+                  Clause {clauseId}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {byClause[clauseId].length} recommendation{byClause[clauseId].length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {byClause[clauseId].map((rec, i) => (
+                  <RecommendationCard key={i} rec={rec} activeSort={sortBy} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Sorted Flat List (e.g. prioritized by impact, cost, or effort) */
+        <div className="space-y-3">
+          {sortedRecs.map((rec, i) => (
+            <RecommendationCard key={i} rec={rec} rank={i + 1} activeSort={sortBy} showClauseBadge />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -456,6 +634,7 @@ export default function AnalysisDetailPage() {
   const [resultVersion, setResultVersion] = useState(0)
   const [staleness, setStaleness] = useState(null)
   const [reanalyzing, setReanalyzing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function refresh() {
     const a = await getAnalysis(id).catch(() => null)
@@ -501,6 +680,20 @@ export default function AnalysisDetailPage() {
       await refresh()
     } catch (err) { alert(err.message) }
     setActioning(false)
+  }
+
+  async function handleDelete() {
+    if (!window.confirm('Are you sure you want to delete this analysis report? All results, recommendations, and missing requirements for this analysis will be permanently deleted.')) {
+      return
+    }
+    setDeleting(true)
+    try {
+      await deleteAnalysis(id)
+      navigate('/analyses')
+    } catch (err) {
+      alert(err.message || 'Failed to delete analysis')
+      setDeleting(false)
+    }
   }
 
   // Once the analysis is complete, check whether documents have changed since it ran.
@@ -567,7 +760,7 @@ export default function AnalysisDetailPage() {
               <button
                 onClick={handleExport}
                 disabled={exporting}
-                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 transition-colors cursor-pointer"
               >
                 {exporting
                   ? <Spinner size="sm" />
@@ -586,7 +779,7 @@ export default function AnalysisDetailPage() {
               <button
                 onClick={handlePause}
                 disabled={actioning}
-                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60 transition-colors cursor-pointer"
               >
                 {actioning && <Spinner size="sm" />}
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -597,13 +790,28 @@ export default function AnalysisDetailPage() {
               <button
                 onClick={handleResume}
                 disabled={actioning}
-                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60 transition-colors cursor-pointer"
               >
                 {actioning && <Spinner size="sm" />}
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 Resume
               </button>
             )}
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60 transition-colors cursor-pointer"
+              title="Delete this analysis report"
+            >
+              {deleting ? (
+                <Spinner size="sm" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+              Delete
+            </button>
           </div>
         </div>
       </div>
