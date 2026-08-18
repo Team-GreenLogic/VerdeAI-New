@@ -10,7 +10,7 @@
     {
       "user": "verdeai",
       "vhost": "/",
-      "configure": ".*",
+      "configure": ".*",o
       "write": ".*",
       "read": ".*"
     }

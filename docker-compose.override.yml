@@ -1,4 +1,4 @@
-
+version: "3.9"
 
 # Local development overrides: bind-mount source for hot-reload
 services:
@@ -40,3 +40,12 @@ services:
       - ./shared:/app/shared:ro
       - ./services/chat-rag:/app/service:ro
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+  demo-ui:
+    volumes:
+      - ./demo_ui:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_CHAT_URL: http://localhost:8001
+
