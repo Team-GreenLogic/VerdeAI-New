@@ -204,10 +204,22 @@ export default function Documents() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {docs.map(doc => (
+              {docs.map(doc => {
+                const matchFilename = doc.previous_version_id
+                  ? docs.find(d => d.document_id === doc.previous_version_id)?.filename
+                  : null
+                return (
                 <tr key={doc.document_id} className="hover:bg-brand-50/40 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-800 max-w-xs truncate">
-                    {doc.filename}
+                  <td className="px-4 py-3 font-medium text-slate-800 max-w-xs">
+                    <div className="truncate">{doc.filename}</div>
+                    {doc.previous_version_id && doc.cdc_overlap != null && (
+                      <span
+                        title={`${Math.round(doc.cdc_overlap * 100)}% byte-overlap with ${matchFilename ?? 'a previous document'} — treated as a modified version.`}
+                        className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 max-w-full"
+                      >
+                        <span className="truncate">{Math.round(doc.cdc_overlap * 100)}% match · {matchFilename ?? 'previous version'}</span>
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3"><Badge status={doc.status} /></td>
                   <td className="px-4 py-3 text-slate-500">{doc.pages ?? '—'}</td>
@@ -223,7 +235,8 @@ export default function Documents() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

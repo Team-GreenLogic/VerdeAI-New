@@ -122,6 +122,8 @@ async def list_documents(
             status=d.get("status", "unknown"),
             pages=d.get("pages"),
             uploaded_at=d.get("created_at", datetime.now(timezone.utc)),
+            previous_version_id=d.get("previous_version_id"),
+            cdc_overlap=d.get("cdc_overlap"),
         )
         for d in docs
     ]
