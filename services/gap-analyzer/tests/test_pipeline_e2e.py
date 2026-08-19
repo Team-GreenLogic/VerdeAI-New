@@ -1,7 +1,7 @@
 """End-to-end exercise of the validated LangGraph clause pipeline.
 
 Mocks the network/DB boundary (embed_query, hybrid_retrieve, stream_structured,
-Mongo) so the full graph — grade_evidence, state_compare, gap_analyse,
+Mongo) so the full graph — grade_evidence, slot_fill, gap_analyse,
 verify_grounding (with its bounded repair loop), reconcile, persist — runs for
 real without any external services. This is the fastest way to catch node-name
 / conditional-edge-map / state-shape mistakes before a Docker rebuild.
@@ -75,6 +75,27 @@ async def _fake_emit(*_args: Any, **_kwargs: Any) -> None:
     """No-op — progress events go to Redis, which isn't available in these tests."""
 
 
+def _slot_fills(**states: str) -> dict[str, Any]:
+    """A slot fill covering every slot CLAUSE synthesizes, all "filled" by default.
+
+    CLAUSE has no generated ``slot_schema``, so ``clause_slot_schema`` derives one slot per
+    sentence-split sub-requirement ("6.1.2-1", "6.1.2-2"). Override any of them by slot_id,
+    e.g. ``_slot_fills(**{"6.1.2-2": "partially_filled"})``.
+    """
+    return {
+        "slot_fills": [
+            {
+                "slot_id": slot["slot_id"],
+                "state": states.get(slot["slot_id"], "filled"),
+                "value": "evidence found",
+                "citation_ids": [i],
+                "notes": "",
+            }
+            for i, slot in enumerate(ac.clause_slot_schema(CLAUSE), 1)
+        ]
+    }
+
+
 def _install_common_mocks(monkeypatch: pytest.MonkeyPatch, chunks: list[dict[str, Any]]) -> None:
     async def fake_embed_query(_text: str) -> list[float]:
         return [0.1, 0.2, 0.3]
@@ -119,14 +140,49 @@ async def test_pipeline_no_chunks_abstains(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_pipeline_low_score_chunks_abstain_without_llm_calls(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Chunks below the rerank-score floor should never reach an LLM call."""
+async def test_pipeline_low_score_chunks_proceed_as_degraded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chunks below the rerank-score floor are used anyway, and the verdict is marked degraded.
+
+    This reverses the earlier "abstain rather than spend LLM calls" behaviour. On the
+    five-company benchmark, abstaining cost 18 accuracy points: clauses 8.2 and 9.3 returned
+    Insufficient Evidence while the tenant's corpus held Emergency_Response_Plan and
+    Management_Review_Minutes. An absolute score floor is not a reliable signal that evidence
+    is unusable, so where chunks were retrieved at all the clause is judged on the best of them
+    and flagged, rather than silently refusing to answer.
+    """
     low_score_chunks = [{**c, "rerank_score": 0.05} for c in CHUNKS]
     _install_common_mocks(monkeypatch, chunks=low_score_chunks)
+    monkeypatch.setattr(ac.settings, "EVIDENCE_GRADER_ENABLED", False)
+    db = _FakeDB()
+
+    async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(_slot_fills())
+        if schema is ac.GapVerdict:
+            return schema.model_validate(_met_verdict())
+        if schema is ac.GroundednessResult:
+            return schema.model_validate({"grounded": True, "unsupported_claims": [], "reason": "ok"})
+        raise AssertionError(f"unexpected schema {schema}")
+
+    monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
+
+    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    assert result["decision"] != "Insufficient Evidence"
+    assert result["evidence_status"] == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_no_chunks_still_abstains(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The degraded path must not paper over a genuinely empty retrieval.
+
+    Nothing retrieved means there is nothing to judge, and inventing a verdict there would be
+    the failure the abstain path exists to prevent.
+    """
+    _install_common_mocks(monkeypatch, chunks=[])
     db = _FakeDB()
 
     async def fail_if_called(**_kwargs: Any) -> Any:
-        raise AssertionError("stream_structured should not be called when evidence is below threshold")
+        raise AssertionError("stream_structured should not be called when nothing was retrieved")
 
     monkeypatch.setattr(ac, "stream_structured", fail_if_called)
 
@@ -145,8 +201,8 @@ async def test_pipeline_happy_path_grounded_met(monkeypatch: pytest.MonkeyPatch)
     async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
         name = kwargs.get("name", "")
         calls.append(name)
-        if schema is ac.StateDiff:
-            return schema.model_validate({"state_diff": {}, "reference_context": {}})
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(_slot_fills())
         if schema is ac.GapVerdict:
             return schema.model_validate(_met_verdict())
         if schema is ac.GroundednessResult:
@@ -158,7 +214,7 @@ async def test_pipeline_happy_path_grounded_met(monkeypatch: pytest.MonkeyPatch)
     result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
 
     assert result["decision"] == "Met"
-    assert calls == ["state_compare", "gap_analyse", "groundedness_judge"]
+    assert calls == ["slot_fill", "gap_analyse", "groundedness_judge"]
     assert len(result["citations"]) == 2
     # Persisted citations should be display-enriched with the real filename/text.
     persisted = db.result_store.upserted[-1]
@@ -178,8 +234,8 @@ async def test_pipeline_fabricated_citation_triggers_repair_then_succeeds(monkey
 
     async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
         nonlocal gap_analyse_call_count
-        if schema is ac.StateDiff:
-            return schema.model_validate({"state_diff": {}, "reference_context": {}})
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(_slot_fills())
         if schema is ac.GapVerdict:
             gap_analyse_call_count += 1
             if gap_analyse_call_count == 1:
@@ -212,8 +268,8 @@ async def test_pipeline_persistent_ungrounded_verdict_abstains(monkeypatch: pyte
     db = _FakeDB()
 
     async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
-        if schema is ac.StateDiff:
-            return schema.model_validate({"state_diff": {}, "reference_context": {}})
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(_slot_fills())
         if schema is ac.GapVerdict:
             return schema.model_validate(_met_verdict(
                 reasoning="Per Chunk 9, everything is fine.",
@@ -231,24 +287,19 @@ async def test_pipeline_persistent_ungrounded_verdict_abstains(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_pipeline_reconciles_llm_decision_against_findings(monkeypatch: pytest.MonkeyPatch) -> None:
-    """LLM claims Met but one finding is unmet — the persisted decision should be
-    the conservative, findings-derived one, not the LLM's stated decision.
+async def test_pipeline_reconciles_llm_decision_against_slot_fills(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM claims Met but a required slot came back partially filled — the persisted
+    decision should be the one the slot states derive, not the LLM's stated decision.
     """
     _install_common_mocks(monkeypatch, chunks=CHUNKS)
     monkeypatch.setattr(ac.settings, "EVIDENCE_GRADER_ENABLED", False)
     db = _FakeDB()
 
     async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
-        if schema is ac.StateDiff:
-            return schema.model_validate({"state_diff": {}, "reference_context": {}})
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(_slot_fills(**{"6.1.2-2": "partially_filled"}))
         if schema is ac.GapVerdict:
-            return schema.model_validate(_met_verdict(
-                findings=[
-                    {"req_id": "6.1.2-1", "status": "satisfied", "citation_ids": [1], "notes": "ok"},
-                    {"req_id": "6.1.2-2", "status": "unmet", "citation_ids": [], "notes": "no evidence"},
-                ],
-            ))
+            return schema.model_validate(_met_verdict())
         if schema is ac.GroundednessResult:
             return schema.model_validate({"grounded": True, "unsupported_claims": [], "reason": "ok"})
         raise AssertionError(f"unexpected schema {schema}")
@@ -259,6 +310,37 @@ async def test_pipeline_reconciles_llm_decision_against_findings(monkeypatch: py
 
     assert result["decision"] == "Partially Met"
     assert "Reconciliation note" in result["reasoning"]
+    # Findings are rebuilt from the slots, so materiality reflects the schema's
+    # `required` flag rather than anything the model claimed.
+    statuses = {f["req_id"]: f["status"] for f in result["findings"]}
+    assert statuses == {"6.1.2-1": "satisfied", "6.1.2-2": "partial"}
+
+
+@pytest.mark.asyncio
+async def test_pipeline_unfilled_required_slots_derive_not_met(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No required slot could be answered — the clause fails outright, and `material`
+    is set from the schema rather than left to the model to volunteer."""
+    _install_common_mocks(monkeypatch, chunks=CHUNKS)
+    monkeypatch.setattr(ac.settings, "EVIDENCE_GRADER_ENABLED", False)
+    db = _FakeDB()
+
+    async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(
+                _slot_fills(**{"6.1.2-1": "not_filled", "6.1.2-2": "not_filled"})
+            )
+        if schema is ac.GapVerdict:
+            return schema.model_validate(_met_verdict())
+        if schema is ac.GroundednessResult:
+            return schema.model_validate({"grounded": True, "unsupported_claims": [], "reason": "ok"})
+        raise AssertionError(f"unexpected schema {schema}")
+
+    monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
+
+    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+
+    assert result["decision"] == "Not Met"
+    assert all(f["material"] for f in result["findings"])
 
 
 @pytest.mark.asyncio
@@ -268,8 +350,8 @@ async def test_pipeline_paused_analysis_raises(monkeypatch: pytest.MonkeyPatch) 
     db = _FakeDB()
 
     async def fake_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
-        if schema is ac.StateDiff:
-            return schema.model_validate({"state_diff": {}, "reference_context": {}})
+        if schema is ac.SlotFillResult:
+            return schema.model_validate(_slot_fills())
         raise AssertionError("gap_analyse should not run once paused")
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
@@ -284,8 +366,8 @@ async def test_pipeline_paused_analysis_raises(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
-async def test_state_compare_hard_failure_propagates_instead_of_degrading(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression test: previously a state_compare failure was swallowed to an
+async def test_slot_fill_hard_failure_propagates_instead_of_degrading(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression test: previously a state-comparison failure was swallowed to an
     empty {} and gap_analyse still ran, silently producing a verdict from no
     comparison data. It must now propagate so the actor records Error.
     """
@@ -294,9 +376,9 @@ async def test_state_compare_hard_failure_propagates_instead_of_degrading(monkey
     db = _FakeDB()
 
     async def failing_stream_structured(*, model: str, messages: list[dict[str, Any]], schema: type, **kwargs: Any) -> Any:
-        if schema is ac.StateDiff:
+        if schema is ac.SlotFillResult:
             raise StructuredOutputError("simulated hard failure")
-        raise AssertionError("gap_analyse should not run when state_compare fails hard")
+        raise AssertionError("gap_analyse should not run when slot_fill fails hard")
 
     monkeypatch.setattr(ac, "stream_structured", failing_stream_structured)
 

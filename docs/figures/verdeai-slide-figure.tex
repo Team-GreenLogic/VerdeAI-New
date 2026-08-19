@@ -1,0 +1,94 @@
+% VerdeAI gap-analysis pipeline — PRESENTATION SLIDE figure.
+% Standalone, wide (16:9-friendly). Compiles to one cropped PDF/PNG:
+%   pdflatex verdeai-slide-figure.tex
+%   pdftoppm -png -r 300 verdeai-slide-figure.pdf verdeai-slide-figure
+% Drop the PNG straight into PowerPoint / Google Slides / Keynote.
+\documentclass[tikz, border=8mm]{standalone}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+
+\definecolor{inkcolor}{HTML}{17241B}
+\definecolor{mutedtext}{HTML}{4D5D4F}
+\definecolor{iofill}{HTML}{B7C6DA}
+\definecolor{processfill}{HTML}{BFD3BC}
+\definecolor{aifill}{HTML}{CBB9D6}
+\definecolor{reportfill}{HTML}{3E5C43}
+
+\begin{document}
+\begin{tikzpicture}[
+  >=Stealth,
+  every node/.style={font=\Large},
+  node distance=10mm and 10mm,
+  align=center,
+  thick,
+]
+
+\tikzset{
+  io/.style={rectangle, rounded corners=3pt, draw=inkcolor, fill=iofill,
+    minimum width=3.4cm, minimum height=1.6cm, text width=3.1cm},
+  process/.style={rectangle, rounded corners=3pt, draw=inkcolor, fill=processfill,
+    minimum width=3.4cm, minimum height=1.6cm, text width=3.1cm},
+  ai/.style={rectangle, rounded corners=3pt, draw=inkcolor, line width=1.4pt,
+    fill=aifill, minimum width=3.4cm, minimum height=1.6cm, text width=3.1cm},
+  flowline/.style={-{Stealth[length=3.5mm]}, inkcolor, line width=1.2pt},
+  looparrow/.style={-{Stealth[length=3.5mm]}, mutedtext, dashed, line width=1.1pt},
+}
+
+\newcommand{\documentshape}[2]{
+  \draw[inkcolor, fill=reportfill]
+    (#1.north west) -- (#1.north east)
+    -- ($(#1.south east)+(0,0.18)$)
+    .. controls ($(#1.south east)+(-0.6,-0.2)$) and ($(#1.south west)+(0.6,-0.2)$) ..
+    ($(#1.south west)+(0,0.18)$) -- cycle;
+  \node[text=white, font=\Large, align=center] at (#1) {#2};
+}
+
+% ---------------------------------------------------------------
+% ROW 1 — ingest company documents (once)
+% ---------------------------------------------------------------
+\node[io]                        (docs)    {Company\\Documents};
+\node[process, right=of docs]    (index)   {Parse, Chunk\\\& Index};
+
+% ---------------------------------------------------------------
+% ROW 2 — per ISO clause (repeats), directly below row 1
+% ---------------------------------------------------------------
+\node[process, below=16mm of index]  (retrieve) {Retrieve\\Evidence};
+\node[ai,      right=of retrieve]    (fill)     {Fill Slot\\Schema};
+\node[ai,      right=of fill]        (explain)  {Explain\\Findings};
+\node[process, right=of explain]     (score)    {Score \&\\Decide};
+
+% ---------------------------------------------------------------
+% ROW 3 — output
+% ---------------------------------------------------------------
+\node[rectangle, minimum width=3.4cm, minimum height=1.6cm,
+      below=16mm of score]           (reportbox) {};
+
+% Main flow
+\draw[flowline] (docs) -- (index);
+\draw[flowline] (index.south) -- (retrieve.north);
+\draw[flowline] (retrieve) -- (fill);
+\draw[flowline] (fill) -- (explain);
+\draw[flowline] (explain) -- (score);
+\draw[flowline] (score.south) -- (reportbox.north);
+
+% Loop back — next clause
+\draw[looparrow] (score.south) .. controls
+  +(0,-1.6) and +(0,-1.6) .. node[below, font=\normalsize, text=mutedtext, yshift=-2mm]
+  {repeat for every clause} (retrieve.south);
+
+\documentshape{reportbox}{Gap Analysis\\Report}
+
+% ---------------------------------------------------------------
+% Minimal color key
+% ---------------------------------------------------------------
+\node[io, minimum width=0.5cm, minimum height=0.5cm, text width=0cm,
+      below=14mm of docs, xshift=0mm] (k1) {};
+\node[right=2mm of k1, font=\normalsize, text=inkcolor] {Data};
+\node[process, minimum width=0.5cm, minimum height=0.5cm, text width=0cm,
+      right=16mm of k1] (k2) {};
+\node[right=2mm of k2, font=\normalsize, text=inkcolor] {Deterministic step};
+\node[ai, minimum width=0.5cm, minimum height=0.5cm, text width=0cm,
+      right=16mm of k2] (k3) {};
+\node[right=2mm of k3, font=\normalsize, text=inkcolor] {AI / LLM step};
+
+\end{tikzpicture}
+\end{document}

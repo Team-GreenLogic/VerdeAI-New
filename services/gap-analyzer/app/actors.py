@@ -20,7 +20,7 @@ from verdeai_shared.pipeline.recommendations import generate_recommendations
 from verdeai_shared.retrieval.embedder import embed_query
 from verdeai_shared.retrieval.hybrid import hybrid_retrieve
 
-from app.pipeline.aggregation import aggregate_parent_decisions
+from app.pipeline.aggregation import aggregate_children_slots, aggregate_parent_decisions
 from app.pipeline.analyse_clause import AnalysisPaused, analyse_clause, build_query_text
 from app.progress import emit
 
@@ -148,6 +148,17 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             if clause_id not in to_process_ids:
                 continue
 
+            # Title-only clauses (ISO 14001's 6.1, 6.2, 7.4, 7.5, 9.1, 9.2 — headings with
+            # no normative text of their own, verified against the standard) carry no
+            # slot_schema and are never independently analysed: no retrieval, no LLM calls,
+            # no recommendations (you remediate 6.2 by fixing 6.2.1/6.2.2, not by drafting a
+            # recommendation against a heading). Their result comes entirely from the
+            # unconditional post-loop aggregation below. `completed` still advances so
+            # progress reaches `total` — `total` is len(clauses), which includes them.
+            if clause.get("title_only"):
+                completed += 1
+                continue
+
             # Pause check before each clause
             doc = await db.analyses.find_one(
                 {"analysis_id": analysis_id}, {"status": 1}
@@ -250,6 +261,28 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 decision = "Error"
                 gap_count += 1
                 completed += 1
+                # Persist the failure. Without this the clause simply vanishes: no row in
+                # result_store, no error field on the analysis, and a final status of
+                # "complete" — a partially failed audit rendering as a finished one, which for
+                # a compliance product is the worst available failure mode. The row also makes
+                # the clause re-runnable, since resume skips only clauses already present.
+                try:
+                    await ResultStoreRepository(db, tenant_id).upsert(
+                        analysis_id,
+                        clause_id,
+                        {
+                            "decision": "Error",
+                            "confidence": 0.0,
+                            "reasoning": f"Clause analysis failed: {exc}",
+                            "citations": [],
+                            "missing_evidence": [],
+                            "error": str(exc),
+                        },
+                    )
+                except Exception as persist_exc:  # never mask the original
+                    logger.error(
+                        "Could not persist Error result", clause_id=clause_id, error=str(persist_exc)
+                    )
                 await emit(
                     tenant_id, analysis_id, "clause", "progress",
                     f"{clause_id}: {decision} ({completed}/{total})",
@@ -265,24 +298,45 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
         # set (not just to_process_ids) so a delta run also re-derives parents that were
         # copied forward rather than re-analysed.
         all_results = await ResultStoreRepository(db, tenant_id).list_for_analysis(analysis_id)
-        parent_updates = aggregate_parent_decisions(all_results)
+        known_clause_ids = {c.get("clause_id", "") for c in clauses}
+        clause_titles = {c.get("clause_id", ""): c.get("title", "") for c in clauses}
+        parent_updates = aggregate_parent_decisions(all_results, known_clause_ids=known_clause_ids)
         if parent_updates:
             by_clause = {r["clause_id"]: r for r in all_results if r.get("clause_id")}
             for cid, new_decision in parent_updates.items():
-                previous = by_clause[cid].get("decision", "Unknown")
-                note = (
-                    chr(10) * 2
-                    + f"[Parent aggregation: derived '{new_decision}' from sub-clause "
-                    + f"verdicts; independent analysis of this clause said '{previous}'.]"
-                )
-                await ResultStoreRepository(db, tenant_id).upsert(
-                    analysis_id, cid,
-                    {"decision": new_decision,
-                     "reasoning": (by_clause[cid].get("reasoning", "") + note)},
-                )
-                by_clause[cid]["decision"] = new_decision
+                # Real slot detail for this parent, pooled from its children — never a
+                # fabricated schema of the parent's own. Purely additive: never touches
+                # whatever slot_fills/slot_schema the row already carries (title-only
+                # clauses never had any to begin with).
+                children_summary = aggregate_children_slots(cid, all_results, clause_titles)
+                # A title-only parent (6.1, 6.2, 7.4, 7.5, 9.1, 9.2 — see clause_slot_schema)
+                # has no row here at all: it was never independently analysed, so `cid` is
+                # absent from `by_clause` on its first-ever aggregation. Treat that as "no
+                # prior verdict" rather than KeyError.
+                existing_row = by_clause.get(cid, {})
+                previous = existing_row.get("decision")
+                if previous is None:
+                    note = (
+                        chr(10) * 2
+                        + "[Aggregated from sub-clause verdicts; this clause has no "
+                        + "normative text of its own (ISO 14001 heading).]"
+                    )
+                else:
+                    note = (
+                        chr(10) * 2
+                        + f"[Parent aggregation: derived '{new_decision}' from sub-clause "
+                        + f"verdicts; independent analysis of this clause said '{previous}'.]"
+                    )
+                update: dict[str, Any] = {
+                    "decision": new_decision,
+                    "reasoning": (existing_row.get("reasoning", "") + note),
+                }
+                if children_summary is not None:
+                    update["children_summary"] = children_summary.model_dump()
+                await ResultStoreRepository(db, tenant_id).upsert(analysis_id, cid, update)
+                by_clause[cid] = {**existing_row, "decision": new_decision}
                 logger.info("Parent clause aggregated", clause_id=cid,
-                            was=previous, now=new_decision)
+                            was=(previous or "none (title-only)"), now=new_decision)
 
                 # In-loop generation already ran under the pre-aggregation decision, and the
                 # gaps.ready consumers skip Met / Insufficient Evidence — so nothing else
@@ -296,8 +350,18 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                         {"tenant_id": tenant_id, "analysis_id": analysis_id, "clause_id": cid}
                     )
 
-            # The in-loop accumulator counted pre-aggregation decisions.
-            gap_count = sum(1 for r in by_clause.values() if r.get("decision") != "Met")
+        # Recompute counters from the persisted set, unconditionally. Previously this ran only
+        # inside `if parent_updates:`, so the same set of clause failures produced a different
+        # gap_count depending on whether a parent happened to aggregate — a number that varied
+        # with an unrelated code path.
+        final_rows = await ResultStoreRepository(db, tenant_id).list_for_analysis(analysis_id)
+        gap_count = sum(1 for r in final_rows if r.get("decision") != "Met")
+        error_count = sum(1 for r in final_rows if r.get("decision") == "Error")
+        # Terminal status stays "complete" rather than gaining a "complete_with_errors" variant:
+        # seven call sites gate on `status != "complete"` (report download, delta re-analysis,
+        # staleness, the UI's DONE set), and a new status string would silently disable them for
+        # any run with a single failed clause. The failure is surfaced through error_count, the
+        # persisted Error rows, and the UI banner instead — all of which the API already carries.
 
         logger.info(
             "Gap analysis complete",
@@ -305,17 +369,26 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             analysis_id=analysis_id,
             clauses=total,
             gaps=gap_count,
+            errors=error_count,
             parents_aggregated=len(parent_updates),
         )
 
         await db.analyses.update_one(
             {"analysis_id": analysis_id, "tenant_id": tenant_id},
-            {"$set": {"status": "complete", "gap_count": gap_count}},
+            {
+                "$set": {
+                    "status": "complete",
+                    "gap_count": gap_count,
+                    "clause_total": total,
+                    "error_count": error_count,
+                }
+            },
         )
 
-        await emit(tenant_id, analysis_id, "complete", "done",
-                   f"Analysis complete — {gap_count} gaps found",
-                   redis_client=redis)
+        summary = f"Analysis complete — {gap_count} gaps found"
+        if error_count:
+            summary += f" ({error_count} clause(s) failed to analyse)"
+        await emit(tenant_id, analysis_id, "complete", "done", summary, redis_client=redis)
 
         await _publish_gaps_ready(AnalysisGapsReady(
             tenant_id=tenant_id,

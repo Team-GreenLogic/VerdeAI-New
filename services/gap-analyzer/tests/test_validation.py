@@ -233,3 +233,50 @@ def test_deterministic_grounding_accepts_not_met_with_material_finding():
     passed, reasons = check_deterministic_grounding(verdict, num_chunks=3)
     assert passed is True
     assert reasons == []
+
+
+def test_reconcile_derived_override_wins_over_findings():
+    """Slot-filled clauses derive their decision from slot completeness, not from the
+    findings' own aggregation — a lone unfilled required slot is a partial clause, even
+    though a material unmet finding would otherwise derive Not Met."""
+    findings = [
+        SubRequirementFinding(req_id="6.2.2-1", status="satisfied", citation_ids=[1]),
+        SubRequirementFinding(req_id="6.2.2-2", status="unmet", material=True, citation_ids=[2]),
+    ]
+    out = reconcile_decision(
+        findings, "Met", 0.9, grounded_chunk_count=3, derived_override="Partially Met"
+    )
+    assert out["decision"] == "Partially Met"
+    assert "Reconciled" in out["note"]
+
+
+def test_reconcile_derived_override_agreeing_with_llm_carries_no_note():
+    findings = [SubRequirementFinding(req_id="5.2-1", status="satisfied", citation_ids=[1])]
+    out = reconcile_decision(findings, "Met", 0.9, grounded_chunk_count=3, derived_override="Met")
+    assert out["decision"] == "Met"
+    assert out["note"] is None
+
+
+def test_reconcile_derived_override_applies_with_no_findings():
+    """A clause whose every slot came back not_applicable produces no findings at all;
+    the derived decision must still bind rather than falling through to the LLM's."""
+    out = reconcile_decision([], "Met", 0.9, grounded_chunk_count=3, derived_override="Not Met")
+    assert out["decision"] == "Not Met"
+
+
+def test_grounding_material_rule_can_be_waived_for_slot_filled_clauses():
+    """Materiality comes from the slot schema and the findings are rebuilt in
+    reconciliation, so requiring the model to record it would fail a correct verdict."""
+    verdict = GapVerdict(
+        decision="Not Met",
+        confidence=0.8,
+        reasoning="Chunk 1 shows no completion date was set.",
+        findings=[SubRequirementFinding(req_id="completion_date", status="unmet", material=False)],
+        citations=[Citation(type="chunk", chunk_id="Chunk 1")],
+    )
+    assert check_deterministic_grounding(verdict, num_chunks=3)[0] is False
+    passed, reasons = check_deterministic_grounding(
+        verdict, num_chunks=3, require_material_for_not_met=False
+    )
+    assert passed is True
+    assert reasons == []

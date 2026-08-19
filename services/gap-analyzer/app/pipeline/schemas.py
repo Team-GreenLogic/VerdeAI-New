@@ -30,20 +30,6 @@ class Citation(BaseModel):
     page: int | str | None = None
 
 
-class StateDiffEntry(BaseModel):
-    expected: str | float | bool | None = None
-    actual: str | float | bool | None = None
-    satisfied: bool = False
-    kind: str | None = None
-
-
-class StateDiff(BaseModel):
-    """Output schema for the state_compare node."""
-
-    state_diff: dict[str, StateDiffEntry] = Field(default_factory=dict)
-    reference_context: dict[str, str | float | bool | None] = Field(default_factory=dict)
-
-
 class SubRequirementFinding(BaseModel):
     """Per-sub-requirement verdict, the deterministic basis for the clause decision."""
 

@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any
 
+import httpx
 from loguru import logger
 
 from verdeai_shared.settings import settings
@@ -44,6 +45,15 @@ def _get_client() -> Any:
                 "HTTP-Referer": settings.OPENROUTER_APP_URL,
                 "X-Title": settings.OPENROUTER_APP_NAME,
             },
+            # No timeout previously — a request that never got a first byte (or a stream that
+            # stalled mid-response) blocked the calling worker forever. Confirmed live: a gap
+            # analysis sat on its first clause with the last log line being "Starting gap
+            # analysis" and nothing after it. connect=10s catches an unreachable/DNS-broken
+            # endpoint fast; the 180s total budget is generous for a reasoning-model completion
+            # but still finite, so the clause fails and is retried/reported instead of hanging
+            # the worker (and, with prefetch_count=1, that tenant's whole queue) indefinitely.
+            timeout=httpx.Timeout(180.0, connect=10.0),
+            max_retries=0,  # transport retries are handled explicitly in structured.py
         )
     return _client
 

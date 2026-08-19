@@ -45,17 +45,40 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Four sibling packages are all named "tests" (shared, api-gateway, gap-analyzer, and the repo
+# root). Under the default "prepend" import mode pytest binds sys.modules["tests"] to whichever
+# it finds first, and every later "tests.*" import resolves against that package and fails — the
+# suite collected 6 tests and 12 collection errors from the repo root. importlib mode gives each
+# test module its own name and needs no __init__.py.
+# NOTE: this is set via addopts below, not as a bare `importmode` key — pytest has no such ini
+# option (it silently warns "Unknown config option" and is ignored); the real key is the CLI
+# flag `--import-mode`, only settable here through addopts.
+# Only "shared" and the repo root go on the path. Service test modules import their own
+# top-level "app" package, and two services both define one — putting several service roots
+# here reintroduces exactly the collision this section fixes, one level down. Service suites
+# are therefore run from their own directory, in their container (see the Makefile), which is
+# also the only place their dependencies are installed.
+pythonpath = [
+    "shared",
+    ".",
+]
+# Deliberately NOT services/api-gateway/tests or services/gap-analyzer/tests: those import
+# their own top-level "app" package and their heavier deps (motor extras aside, e.g. bm25s,
+# voyageai) are only installed inside their own containers. Because pytest aborts the whole
+# run on any collection error, including them here means bare `pytest` from the repo root —
+# the command a dev, an IDE, or CI runs by default — collects 0 tests and reports failure
+# without a single test having executed. Run those suites via `make test`, which invokes them
+# inside their containers instead.
 testpaths = [
     "shared/tests",
-    "services/api-gateway/tests",
-    "services/document-processor/tests",
-    "services/iso-knowledge/tests",
-    "services/gap-analyzer/tests",
-    "services/recommendation/tests",
-    "services/missing-requirements/tests",
-    "services/chat-rag/tests",
     "tests",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "llm: makes real, billed LLM API calls — deselected by default via addopts",
+    "e2e: requires the full Docker stack to be running",
+]
+# Billed and stack-dependent tests are opt-in: run them with `-m llm` / `-m e2e`.
+addopts = "--import-mode=importlib -m 'not llm and not e2e'"

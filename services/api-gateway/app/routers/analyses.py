@@ -30,6 +30,11 @@ class AnalysisSummary(BaseModel):
     created_at: datetime
     mode: str = "full"
     parent_analysis_id: str | None = None
+    # How many clauses were attempted, and how many failed to analyse. Without these a run
+    # where most clauses errored is indistinguishable from a clean one: status is "complete"
+    # either way and gap_count alone cannot tell a gap from a crash.
+    clause_total: int | None = None
+    error_count: int = 0
 
 
 class StalenessResponse(BaseModel):
@@ -67,6 +72,22 @@ class GapResult(BaseModel):
     reasoning: str
     citations: list[dict[str, Any]]
     missing_evidence: list[str]
+    # What the evidence established per ISO requirement slot, and the findings derived from
+    # it. The decision above follows from these states — see docs/gap-analysis.md §2.1.
+    # Defaulted: results predating the slot layer, and the Insufficient Evidence abstain
+    # path, carry neither.
+    slot_fills: list[dict[str, Any]] = []
+    slot_schema: list[dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
+    # The arithmetic behind the decision (coverage, bands, critical failures) and whether the
+    # evidence it ran on was complete. Both defaulted: results predating them carry neither.
+    decision_trace: dict[str, Any] = {}
+    evidence_status: str = ""
+    # For a title-only clause (ISO 14001's 6.1, 6.2, 7.4, 7.5, 9.1, 9.2 — headings with no
+    # normative text of their own): pooled coverage + each child's real slot fills, grouped
+    # by sub-clause. Never a fabricated schema of this clause's own — slot_fills/slot_schema
+    # above stay empty for these rows. None for an ordinary, independently-analysed clause.
+    children_summary: dict[str, Any] | None = None
 
 
 class RecommendationItem(BaseModel):
@@ -140,6 +161,8 @@ async def list_analyses(principal: CurrentPrincipal) -> list[AnalysisSummary]:
             created_at=r.get("created_at", datetime.now(timezone.utc)),
             mode=r.get("mode", "full"),
             parent_analysis_id=r.get("parent_analysis_id"),
+            clause_total=r.get("clause_total"),
+            error_count=r.get("error_count", 0),
         )
         for r in rows
     ]
@@ -416,6 +439,12 @@ async def get_analysis_results(
             reasoning=r.get("reasoning", ""),
             citations=r.get("citations", []),
             missing_evidence=r.get("missing_evidence", []),
+            slot_fills=r.get("slot_fills", []),
+            slot_schema=r.get("slot_schema", []),
+            findings=r.get("findings", []),
+            decision_trace=r.get("decision_trace", {}),
+            evidence_status=r.get("evidence_status", ""),
+            children_summary=r.get("children_summary"),
         )
         for r in rows
     ]

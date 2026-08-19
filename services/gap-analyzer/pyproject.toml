@@ -19,3 +19,10 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.pytest.ini_options]
+# pytest treats this file as rootdir when the suite is run from the service directory (which is
+# how it runs in-container), so markers must be registered here as well as at the repo root.
+markers = [
+    "llm: makes real, billed LLM API calls — also guarded by RUN_LLM_TESTS=1",
+]

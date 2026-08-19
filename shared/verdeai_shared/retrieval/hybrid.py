@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import Any
 
+from loguru import logger
+
 from verdeai_shared.retrieval.reranker import rerank
 from verdeai_shared.retrieval.vector_search import vector_search_chunks
 from verdeai_shared.retrieval.bm25 import bm25_search
@@ -76,15 +78,26 @@ async def hybrid_retrieve(
     fused = sorted(chunk_map.values(), key=lambda c: scores.get(str(c["_id"]), 0.0), reverse=True)
     fused = fused[:k]
 
-    # Rerank
-    texts = [
-        f"{c.get('context_preamble', '')}\n\n{c.get('text', '')}".strip()
-        for c in fused
-    ]
+    # Rerank. ``text`` already carries the ingestion-time contextual preamble — see
+    # document-processor stage3_chunk.py, which stores "CONTEXT: {preamble}\n\n{chunk_text}".
+    # Prepending context_preamble again duplicated it in every reranked document, diluting the
+    # query-relevant body with repeated boilerplate and depressing every score against the
+    # absolute RERANK_SCORE_THRESHOLD downstream.
+    texts = [str(c.get("text", "")).strip() for c in fused]
     if not texts:
         return []
 
-    reranked = await rerank(query, texts, top_k=settings.RERANK_TOP_K)
+    try:
+        reranked = await rerank(query, texts, top_k=settings.RERANK_TOP_K)
+    except Exception as exc:  # degrade, don't fail the whole analysis
+        # A reranker outage previously propagated all the way out of the clause pipeline and
+        # turned every clause in the run into an Error. RRF order is a reasonable fallback.
+        logger.warning("Rerank failed — falling back to RRF order", error=str(exc))
+        return [
+            {**c, "rerank_score": scores.get(str(c["_id"]), 0.0)}
+            for c in fused[: settings.RERANK_TOP_K]
+        ]
+
     # Surface the rerank relevance score onto each chunk (previously discarded) so
     # downstream evidence-grading can drop marginal/irrelevant chunks instead of
     # always handing the LLM a fixed top-N regardless of quality.

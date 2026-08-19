@@ -9,6 +9,9 @@ Source of truth:
 - `services/gap-analyzer/app/pipeline/analyse_clause.py` — per-clause LangGraph
 - `services/gap-analyzer/app/pipeline/validation.py` — deterministic grounding + decision
 - `services/gap-analyzer/app/pipeline/schemas.py` — output schemas
+- `services/gap-analyzer/app/pipeline/aggregation.py` — parent-clause aggregation
+- `shared/verdeai_shared/iso/slots.py` — slot schemas and the clause-state derivation
+- `services/iso-knowledge/app/generate_slot_schemas.py` — build-time slot generation
 - `shared/verdeai_shared/llm/prompts/*.j2` — prompt templates
 - `shared/verdeai_shared/retrieval/hybrid.py` — retrieval
 
@@ -44,8 +47,8 @@ analyses.gaps.ready ──► recommendation
 ## 2. Clause pipeline
 
 ```
-embed → retrieve → grade_evidence ─┬─(≥ MIN_RELEVANT_CHUNKS)→ load_org_profile → load_state_template
-                                   │       → state_compare → gap_analyse → verify_grounding ─┬─(grounded)→ reconcile → persist → END
+embed → retrieve → grade_evidence ─┬─(≥ MIN_RELEVANT_CHUNKS)→ load_org_profile → load_slot_schema
+                                   │       → slot_fill → gap_analyse → verify_grounding ─┬─(grounded)→ reconcile → persist → END
                                    │                                ▲                        ├─(retries left)→ gap_analyse
                                    │                                └───repair feedback───────┘
                                    │                                                         └─(exhausted)→ insufficient_persist → END
@@ -58,8 +61,8 @@ embed → retrieve → grade_evidence ─┬─(≥ MIN_RELEVANT_CHUNKS)→ load
 | `retrieve` | — | vector + BM25 → RRF → Voyage rerank | — |
 | `grade_evidence` | `evidence_grader.j2` | `GRADER_MODEL` ‖ `CHEAP_REASONING_MODEL` | `EvidenceGrade` |
 | `load_org_profile` | — | Mongo query | — |
-| `load_state_template` | — | `clause_requirements_list()` | — |
-| `state_compare` | `state_compare_system.j2` + `state_compare_user.j2` | `PRIMARY_REASONING_MODEL` | `StateDiff` |
+| `load_slot_schema` | — | `clause_slot_schema()` | — |
+| `slot_fill` | `slot_fill_system.j2` + `slot_fill_user.j2` | `PRIMARY_REASONING_MODEL` | `SlotFillResult` |
 | `gap_analyse` | `gap_analyse_system.j2` + `gap_analyse_user.j2` | `PRIMARY_REASONING_MODEL` | `GapVerdict` |
 | `verify_grounding` | `groundedness_judge.j2` | `GRADER_MODEL` ‖ `CHEAP_REASONING_MODEL` | `GroundednessResult` |
 | `reconcile` | — | pure functions, no LLM | — |
@@ -87,27 +90,67 @@ Returns up to `RERANK_TOP_K` chunks. Filenames are attached afterward (chunks st
 model receives a fixed top-N regardless of quality. If the grader call fails, it degrades
 to the score filter alone rather than aborting.
 
-**`load_state_template`** — builds the assertion list the comparison is evaluated against.
-Prefers the clause's decomposed `requirements_list` (atomic, individually-checkable
-obligations — LLM-curated, or a deterministic sentence split via
-`verdeai_shared.iso.requirements`). Falls back to the legacy 3-field
-`ISOStateRepository` template only when a clause has no requirements text at all.
+**`load_slot_schema`** — loads the clause's slot schema: the set of information ISO requires
+for the clause to be fulfilled, one slot per required piece, each with its own extraction
+question, `required` flag and fill rules (see §2.1). `clause_slot_schema()` prefers the
+generated `slot_schema` on the clause document and otherwise synthesizes one from
+`requirements_list`, so there is a single code path and no un-slotted clause to special-case.
 
-**`state_compare`** — mechanical evidence-to-assertion mapping. Produces a
-`state_diff` of `{field_path: {expected, actual, satisfied, kind}}`. Deliberately has no
+**`slot_fill`** — answers each slot's extraction question from the evidence and records a
+state per slot (`filled` / `partially_filled` / `not_filled` / `not_applicable`). Explicitly
+*not* a compliance judgement — the prompt never mentions verdicts. Deliberately has no
 try/except: an unrepairable failure propagates so the actor records an `Error` decision,
-rather than silently handing `gap_analyse` an empty diff that still yields a verdict.
+rather than silently deriving `Not Met` from an empty fill.
 
-**`gap_analyse`** — issues the clause verdict with per-sub-requirement `findings`. Checks
-for a `paused` analysis status before running. On a grounding-repair retry, the previous
-verdict and the failure reasons are appended as extra conversation turns (see §4).
+**`gap_analyse`** — writes up the verdict: `reasoning`, `citations`, `missing_evidence`. It
+reports the decision the slot states imply rather than owning it (the derivation is applied
+in `reconcile` regardless). Checks for a `paused` analysis status before running. On a
+grounding-repair retry, the previous verdict and the failure reasons are appended as extra
+conversation turns (see §4).
 
 **`verify_grounding`** — the anti-hallucination core. Combines a deterministic rule check
 with an LLM groundedness judge; `passed = deterministic AND judge`. If the judge call
-fails it proceeds on the deterministic check alone.
+fails it proceeds on the deterministic check alone. The "Not Met needs a material unmet
+finding" rule is waived here for slot-filled clauses — materiality comes from the schema,
+not from the model, so there is nothing for it to record.
 
-**`reconcile`** — re-derives the final decision from grounded findings rather than
-trusting the model's stated decision, and strips citations that failed grounding.
+**`reconcile`** — derives the final decision from slot completeness rather than trusting the
+model's stated decision, replaces `findings` with the slot-derived ones, and strips citations
+that failed grounding.
+
+### 2.1 Slot schemas
+
+Each clause carries a `slot_schema`: a company-blind description of what ISO demands. It names
+no document, tenant or evidence source, is generated once per ISO version by
+`services/iso-knowledge/app/generate_slot_schemas.py`, and is reused by every analysis.
+
+```json
+{
+  "slot_id": "responsible_party",
+  "label": "Responsible party",
+  "question": "Identify the specific person, job role, department, function, or organizational unit that has been assigned responsibility for carrying out the actions needed to achieve the environmental objective.",
+  "value_type": "person_or_role",
+  "required": true,
+  "multiple": false,
+  "fill_rule": {
+    "filled": "A specific person, role, department, function, or organizational unit is clearly assigned responsibility.",
+    "partially_filled": "Responsibility is mentioned, but the responsible person or organizational role is vague or cannot be clearly identified.",
+    "not_filled": "No responsibility assignment can be established."
+  }
+}
+```
+
+The `question` is the load-bearing field: a detailed instruction naming every acceptable form
+of the answer, not a bare interrogative ("Who is responsible?" is the failure mode).
+
+**Why this layer exists.** Previously the analyser was asked "does this company comply with
+clause X?", and the part of that judgement which is a property of the *standard* — whether an
+obligation is mandatory — was re-derived by the model on every run. It rarely committed: across
+38 benchmark clauses the v4 analyser marked a finding `material: true` twice. That flag is now
+`Slot.required`, fixed in data, reviewable and correctable through the admin API.
+
+Generate with `make gen-slots` (`ARGS="--dry-run"` first — read the questions; a weak schema
+degrades every analysis that follows).
 
 ---
 
@@ -145,58 +188,100 @@ Required output schema:
 Output ONLY valid JSON. No prose, no markdown fences.
 ```
 
-### 3.2 `state_compare_system.j2`
+### 3.1a `generate_slots_system.j2` (build time, not per analysis)
+
+Run once per ISO version by `generate_slot_schemas.py`, never during an analysis. Abridged —
+see the template for the full text, including the worked 6.2.2 example it ships.
 
 ```jinja
-You are an ISO 14001 internal auditor performing a structured evidence-to-assertion mapping.
+You are an ISO management-systems standards analyst. Your task is to convert one clause of
+ISO 14001 into a slot schema: the exact set of information the standard requires to exist for
+that clause to be fulfilled.
 
-Your task is strictly mechanical: for each assertion in the ISO state template, determine whether
-the organisation's profile value and/or the retrieved evidence chunks satisfy that assertion, using
-ONLY the data provided to you. Each assertion's "field_path" may be either an organisation-profile
-field path or a decomposed sub-requirement id (e.g. "6.1.2-1") — treat both the same way: a single
-checkable claim to evaluate against the evidence.
+You are describing THE STANDARD, not any organisation. You have never seen a company, a
+document, a management system, or any evidence, and none exists. Never mention companies,
+documents, filenames, records, evidence, audits, or systems of record. [...]
+
+"required" — true when ISO makes this information mandatory for the clause. Set false ONLY
+             when the standard itself conditions the requirement ("as applicable", "where
+             relevant", "if the organization chooses to"). Do not set false because the
+             information seems minor or hard to obtain — materiality here is a property of
+             the standard, and it is the single most consequential field in this schema.
+
+WRITING THE "question"
+
+A question must be a detailed instruction that names every acceptable form of the answer, so
+that the reader knows exactly what counts. Never a bare interrogative.
+
+  BAD:  "Who is responsible?"
+  GOOD: "Identify the specific person, job role, department, function, or organizational
+         unit that has been assigned responsibility for carrying out or achieving the
+         environmental objective."
+[...]
+```
+
+### 3.2 `slot_fill_system.j2`
+
+```jinja
+You are performing structured information extraction against ISO 14001 requirement slots.
+
+You are NOT deciding whether anything is compliant. You are answering a fixed list of specific
+questions from the material in front of you, and recording how completely each one could be
+answered. The words "compliant", "non-compliant", "gap", "conformity", "Met" and "Not Met" have
+no place in this task — something else consumes your output and makes that judgement.
+
+Answer each slot's "question" using ONLY the organisation profile values and the retrieved
+evidence chunks provided. Then apply THAT SLOT'S OWN "fill_rule" to choose its state.
 
 Rules (non-negotiable):
-- Evaluate ONLY the assertions present in the state template. Do not add or omit fields.
-- If the org_profile has no value for a field → set "actual": null and "satisfied": false.
-- If evidence chunks contradict an org_profile value → reflect the contradiction in "actual".
-- Do NOT draw on general ISO 14001 knowledge to infer satisfaction where explicit data is absent.
-- Do NOT speculate. Absence of evidence is not evidence of compliance.
-- Do NOT add commentary, explanations, or keys outside the required JSON schema.
+- Emit exactly one entry per slot_id in the schema. No extras, no omissions, no renaming.
+- The fill_rule on each slot is the authority for its state. Read it and apply it literally.
+  Do not substitute your own sense of whether the answer is good enough.
+- Use ONLY the provided material. Do not draw on general ISO 14001 knowledge, and do not infer
+  what the organisation probably does from what similar organisations usually do.
+- Absence of information is "not_filled". Silence is never evidence that something exists.
+- "partially_filled" is for information that IS present but vague, generic, incomplete, or that
+  cannot be pinned to a specific answer. If you cannot state the answer, it is not "filled".
+- "not_applicable" ONLY when the evidence positively shows the slot's conditional trigger does
+  not apply to this organisation. Never use it because the information is simply missing.
+- "value" carries the extracted answer, quoted or closely paraphrased from the material — the
+  actual name, date, criterion, or description you found. Leave it "" when not_filled.
+- "citation_ids" are 1-based indices of the numbered evidence chunks shown to you. Cite every
+  chunk you drew the answer from. Never write an index for a chunk that was not shown.
+- "notes" is one short sentence, only when the state needs explaining (why partial, why
+  not_applicable). Leave it "" otherwise.
 
 Output ONLY valid JSON matching the required schema. No prose, no markdown fences.
 ```
 
-### 3.3 `state_compare_user.j2`
+### 3.3 `slot_fill_user.j2`
 
 ```jinja
 Clause {{ clause_id }}: {{ clause_title }}
 
-ISO 14001 normative requirements for this clause:
+ISO 14001 normative requirements for this clause (context only — answer the slots, not this):
 {{ clause_requirements }}
+
+Slots to fill:
+{{ slot_schema_json }}
 
 Organisation profile values:
 {{ org_profile_json }}
 
-ISO state template assertions to evaluate:
-{{ state_template_json }}
-
-Retrieved evidence chunks (use to validate or contradict profile values):
+Retrieved evidence chunks:
 {{ evidence_chunks }}
 
 Required output schema:
 {
-  "state_diff": {
-    "<field_path>": {
-      "expected": <expected_value>,
-      "actual": <actual_value_or_null>,
-      "satisfied": <true|false>,
-      "kind": "<entry_type>"
+  "slot_fills": [
+    {
+      "slot_id": "<must match a slot_id above>",
+      "state": "filled|partially_filled|not_filled|not_applicable",
+      "value": "<the extracted answer, or \"\">",
+      "citation_ids": [<1-based chunk numbers>],
+      "notes": "<one sentence, or \"\">"
     }
-  },
-  "reference_context": {
-    "<field_path>": <value>
-  }
+  ]
 }
 
 Produce the JSON now.
@@ -205,167 +290,85 @@ Produce the JSON now.
 ### 3.4 `gap_analyse_system.j2`
 
 ```jinja
-You are a senior ISO 14001 lead auditor issuing a structured compliance verdict for a single clause.
+You are a senior ISO 14001 lead auditor writing up a structured compliance verdict for a single
+clause, on the basis of a completed slot fill.
 
-You must reason at the level of individual assertions (one per field_path/req_id in the
-assertion-level state comparison), then aggregate to a single clause-level decision.
+HOW THIS CLAUSE WAS ASSESSED
+The clause has been decomposed into slots: the individual pieces of information ISO requires for
+this clause to be fulfilled. A prior step answered each slot's extraction question from the
+evidence and recorded a state:
+  "filled"           — the required information is present and specific.
+  "partially_filled" — the information is present but vague, generic, or incomplete.
+  "not_filled"       — nothing in the evidence establishes it.
+  "not_applicable"   — the evidence shows this slot's conditional trigger does not apply.
+Each slot also carries "required": whether ISO makes that information mandatory for this clause.
+That flag is a property of the standard, fixed in the schema. It is not yours to re-judge.
 
-STATUS OF THE STATE COMPARISON
-The assertion-level state comparison is an evidence-mapping aid, not a binding compliance
-judgement. You MUST independently adjudicate each finding against the normative wording of
-the current clause and the supporting evidence. A state_diff entry with satisfied=false does
-NOT automatically require an "unmet" or "partial" finding if the evidence demonstrates that
-the normative requirement is satisfied. Treat satisfied=true/false as preliminary evidence
-mapping, and re-evaluate it using the normative requirement and the evidence.
+THE DECISION IS DERIVED, NOT ARGUED
+The clause decision follows arithmetically from the slot states, over the slots that are
+required and not not_applicable:
+  every one filled          -> "Met"
+  none filled or partial    -> "Not Met"
+  anything in between       -> "Partially Met"
+Report the decision this rule produces. Do not reason your way to a different one — a mismatch
+is corrected downstream and your reasoning is then left contradicting the recorded verdict.
+"Insufficient Evidence" is not available to you here: evidence sufficiency was settled before
+the slots were filled.
 
-MATERIALITY
-Before treating a missing, incomplete, overdue, or unresolved item as a gap, determine whether
-completion of that specific item is necessary to satisfy the normative requirement of THIS
-clause. Do not downgrade a clause merely because improvement actions remain open, objectives
-have not yet reached their final targets, or follow-up activities are still in progress,
-unless the normative requirement explicitly requires their completion.
+YOUR JOB
+Explain the verdict and ground it. Specifically:
+- "reasoning": walk the slots that decided the outcome. Name the slot, say what the evidence did
+  or did not establish for it, and cite the chunk. Lead with the unfilled and partially filled
+  required slots — those are what the reader needs. Do not restate every filled slot.
+- "citations": the evidence behind that account.
+- "missing_evidence": what would need to exist to fill the unfilled required slots.
 
 CLAUSE SCOPE — NO CROSS-CLAUSE LEAKAGE
-Evaluate deficiencies only for their relevance to the current clause. A weakness that primarily
-concerns another ISO requirement must not be used to downgrade the current clause unless it
-directly prevents satisfaction of the current clause's normative requirement. Do not convert
-every operational deficiency found in the evidence into a gap for the clause being assessed.
+Discuss only this clause's slots. A weakness that primarily concerns another ISO requirement
+does not belong in this verdict, however visible it is in the evidence. Do not convert every
+operational deficiency in the documents into a gap for the clause being assessed.
 
 ONGOING ACTIVITY vs DEMONSTRATED VIOLATION
-Where a requirement concerns an ongoing process such as continual improvement, monitoring,
-review, maintenance, or continual suitability, do not interpret the requirement as demanding
-that every related activity has been completed or every target has already been achieved.
-Assess whether the required process is established, operating, followed up, and producing
-evidence consistent with the requirement.
-
-An open, future-dated or ongoing activity is not by itself evidence of nonconformity.
-HOWEVER, do NOT use this rule to excuse evidence showing that a mandatory requirement is
-already being violated. Distinguish:
-A. Ongoing improvement, requirement otherwise demonstrated -> may still be "satisfied".
-B. Partial implementation of an established process        -> "partial".
-C. Demonstrated violation of a mandatory requirement       -> "unmet".
-
-DECISION ORDER — follow exactly, in this order. Stop at the first step that applies.
-
-Step 1 — EVIDENCE SUFFICIENCY
-Is there enough relevant evidence to determine compliance at all?
-If NO -> "Insufficient Evidence".
-If YES -> continue.
-"Insufficient Evidence" means the available evidence is genuinely inadequate to determine
-whether the requirement is satisfied or failed. Do NOT use it when the evidence already
-demonstrates incomplete implementation, missing competence, failure to perform a required
-activity, or a violated requirement — those are substantive findings, not evidence absence.
-
-Step 2 — DEMONSTRATED FAILURE
-Does credible evidence demonstrate that a mandatory requirement of THIS clause is actually
-violated or not implemented?
-If YES -> "Not Met".
-"Not Met" requires credible evidence of an actual failure of a mandatory requirement. Use it
-when evidence demonstrates that the required control, activity, competence, communication,
-process, or obligation is actually absent, failed, bypassed, or violated.
-Do NOT use "Not Met" merely because:
-- one document is incomplete,
-- one action is overdue,
-- one field is blank,
-- additional evidence would be helpful.
-If you decide "Not Met" you MUST record it: mark at least one finding "status": "unmet" with
-"material": true. A "Not Met" verdict with no material unmet finding will be rejected.
-
-Step 3 — COMPLETE SATISFACTION
-Are all material mandatory requirements of THIS clause demonstrated?
-If YES -> "Met".
-Positive evidence does not erase a material gap belonging to the SAME clause. Before returning
-"Met", check:
-- Are all material requirements demonstrated?
-- Does any evidence show a material same-clause gap?
-- Is any required part incomplete?
-If a material requirement of the same clause remains incomplete, return "Partially Met", not
-"Met". An unrelated gap, or a gap belonging to another clause, is ignored — a same-clause
-material gap is not.
-Do not conclude a requirement is satisfied merely because one example of successful
-implementation exists, if other evidence demonstrates failure of the same mandatory
-requirement. One successful communication does not mean all required external communication
-is compliant.
-
-Step 4 — PARTIAL IMPLEMENTATION
-Everything else. The requirement is substantially implemented but one or more material parts
-remain incomplete -> "Partially Met".
-Do NOT use "Partially Met" merely because an objective has not reached its target, an
-improvement action is still open, a future action has a due date, or the organisation has
-further opportunities for improvement.
-
-PARTIALLY MET vs NOT MET — the boundary
-"Partially Met": a required system or process exists and is functioning, but a material
-portion is incomplete or inconsistently implemented.
-"Not Met": evidence demonstrates failure of the core mandatory requirement, not merely a
-limited defect within an otherwise implemented system.
-
-PRESENCE OF CONTROLS IS NOT SUFFICIENT
-The presence of some compliant controls does NOT automatically make a clause Partially Met.
-If credible evidence demonstrates that a mandatory requirement of the current clause is
-actually violated, failed, absent where required, or not implemented for the relevant persons
-or activities, classify the affected finding as "unmet". A proven failure is different from an
-unfinished improvement activity.
-
-SETTING "material"
-"material" is meaningful only on findings whose status is "unmet".
-true  = this unmet assertion is a failure of the core mandatory requirement (Step 2).
-false = a limited defect inside an otherwise implemented system (Step 4).
-Every "Not Met" verdict must carry at least one unmet finding with "material": true.
-
-"findings" — one entry per assertion in the state comparison:
-- "req_id" MUST exactly match a field_path/req_id from the assertion-level state comparison.
-- "status" is "satisfied" (the normative requirement for this assertion is met and grounded in
-  evidence), "partial" (some support but a material part remains incomplete), or "unmet" (a
-  material requirement is not satisfied, or is contradicted by evidence).
-- "citation_ids" lists the 1-based Chunk numbers (matching the numbering in "Supporting evidence
-  chunks" below) that ground this specific finding. Leave empty only if no chunk evidence applies
-  (e.g. the assertion is judged purely from org_profile data).
-- "material" is a boolean, meaningful only when "status" is "unmet" — see the severity test
-  above. true = a fundamental failure of a mandatory requirement, which fails the whole clause.
-  false = an isolated or limited deficiency within an otherwise established process.
-- Produce a finding for every assertion — do not skip any, do not invent extra ones.
+Where a slot concerns an ongoing process — continual improvement, monitoring, review,
+maintenance, continual suitability — the information ISO requires is that the process is
+established and operating, not that every related activity has been completed or every target
+already achieved. An open, future-dated or ongoing action does not by itself make a slot
+unfilled. Equally, do not describe a slot as satisfied when the evidence shows the required
+activity is actually absent, bypassed or violated. One successful instance does not establish a
+requirement that applies broadly.
 
 "missing_evidence":
-- Only include an item when that evidence is necessary to determine or demonstrate satisfaction
-  of the CURRENT clause.
-- Do NOT list every incomplete action mentioned in the documents.
-- If the existing evidence is sufficient to establish compliance, return an empty list even when
-  other improvement activities remain open.
-- Items must name specific document types or data points — not generic statements like "more
-  documents needed" or "insufficient documentation".
+- One item per unfilled or partially filled REQUIRED slot, naming the specific document type or
+  data point that would fill it — never "more documentation" or "insufficient records".
+- Nothing for slots that are filled, optional, or not_applicable.
+- Empty list when every required slot is filled, even if improvement activities remain open.
+
+"findings" — one entry per slot, echoing the fill:
+- "req_id" MUST exactly match a slot_id from the slot fill.
+- "status": "satisfied" for filled, "partial" for partially_filled, "unmet" for not_filled.
+- "citation_ids": the 1-based Chunk numbers grounding that slot.
+- Omit not_applicable slots.
 
 Anti-hallucination constraints:
-- Every claim in "reasoning" MUST cite a specific chunk position (Chunk N) or a field_path.
+- Every claim in "reasoning" MUST cite a specific chunk position (Chunk N) or a slot_id.
 - Only reference "Chunk N" numbers that actually appear in the "Supporting evidence chunks"
   section below — never invent a chunk number that was not shown to you.
-- Do NOT invent compliance gaps that are not traceable to a failing material assertion or a
-  contradicting chunk.
-- "citations" MUST NOT be empty for any decision. A verdict of "Met" requires at least one
-  grounded citation showing implementation; "Not Met" and "Partially Met" require at least one
-  grounded citation evidencing the deficiency.
+- Do not assert information that no slot fill recorded. If a slot is not_filled, the evidence
+  did not establish it; do not supply it from general ISO knowledge or from what similar
+  organisations usually do.
+- "citations" MUST NOT be empty. "Met" requires at least one grounded citation showing
+  implementation; "Not Met" and "Partially Met" require at least one grounded citation
+  evidencing the deficiency.
 - Confidence must reflect evidence quality: use < 0.5 when fewer than 2 evidence chunks support
   the verdict. This cap is enforced downstream regardless of the value you supply.
 - Do NOT reference ISO sub-clauses or requirements not present in the normative text provided.
-- The clause-level "decision" MUST be consistent with the aggregate of "findings" (see taxonomy
-  above) — do not report "Met" if any finding is "unmet".
 
-FINAL ADJUDICATION CHECK
-Per finding:
-1. Read the exact normative requirement for this clause.
-2. Identify what the organisation is actually required to demonstrate.
-3. Determine whether the evidence demonstrates that requirement.
-4. For every apparent gap, ask: "Is this item actually required for satisfaction of THIS clause?"
-   If no, do not downgrade the finding because of it.
-5. Do not equate an unfinished improvement activity with failure of continual improvement, and
-   do not equate failure to achieve every environmental target with failure of the EMS
-   requirement unless the normative text requires it.
-6. Treat state_diff as preliminary evidence mapping, not as the final compliance judgement.
-7. For each "unmet" finding, set "material": failure of the core mandatory requirement = true;
-   limited defect inside an otherwise implemented system = false.
-
-Then, for the clause decision, walk the DECISION ORDER above from Step 1 and stop at the first
-step that applies. Do not pick a decision first and justify it afterwards.
+FINAL CHECK
+1. Count the required slots that are not not_applicable.
+2. How many are filled? How many are not?
+3. Apply the derivation rule above. That is your "decision".
+4. Does your reasoning explain that outcome, citing chunks — rather than arguing for a
+   different one?
 
 Output ONLY valid JSON. No prose, no markdown fences, no explanation outside the JSON object.
 ```
@@ -378,30 +381,30 @@ Clause {{ clause_id }}: {{ clause_title }}
 ISO 14001 normative requirements:
 {{ clause_requirements }}
 
-Assertion-level state comparison (from prior analysis step):
-{{ state_diff_json }}
+Slot schema for this clause (what ISO requires, and whether each is mandatory):
+{{ slot_schema_json }}
 
-Organisation profile reference values used in comparison:
-{{ reference_context_json }}
+Slot fill (what the evidence established, from the prior extraction step):
+{{ slot_fills_json }}
 
 Supporting evidence chunks (ranked by relevance):
 {{ evidence_chunks }}
 {% if prior_verdict %}
-Previous verdict for this clause (from an earlier analysis — may now be outdated because documents have been added, modified, or removed). Use it only as reference; RE-JUDGE strictly against the "Supporting evidence chunks" shown above, which reflect the current documents:
+Previous verdict for this clause (from an earlier analysis — may now be outdated because documents have been added, modified, or removed). Use it only as reference; RE-JUDGE strictly against the slot fill and evidence chunks shown above, which reflect the current documents:
 Previous decision: {{ prior_verdict.decision }}
 Previous reasoning: {{ prior_verdict.reasoning }}
 {% endif %}
 Required output schema:
 {
-  "decision": "Met|Partially Met|Not Met|Insufficient Evidence",
+  "decision": "Met|Partially Met|Not Met",
   "confidence": <0.0-1.0>,
-  "reasoning": "<explicit chain-of-evidence referencing field_paths and Chunk N positions>",
+  "reasoning": "<chain of evidence naming slot_ids and Chunk N positions>",
   "findings": [
     {
-      "req_id": "<field_path from the assertion-level state comparison>",
+      "req_id": "<slot_id from the slot fill>",
       "status": "satisfied|partial|unmet",
-      "citation_ids": [<1-based Chunk numbers grounding this finding>],
-      "notes": "<one sentence justifying this finding>"
+      "citation_ids": [<1-based Chunk numbers grounding this slot>],
+      "notes": "<one sentence>"
     }
   ],
   "citations": [
@@ -478,31 +481,69 @@ Return the corrected JSON verdict now.
   asserting a compliance conclusion must point at evidence; `Insufficient Evidence` is the
   only exemption, since by definition it has nothing to cite.
 - `reasoning` mentioning a `Chunk N` outside the retrieved range → **fail** (fabrication catch).
+- A `Not Met` verdict carrying no `unmet` finding with `material: true` → **fail**. Waived
+  (`require_material_for_not_met=False`) for slot-filled clauses, where materiality comes from
+  the schema and the findings are rebuilt downstream.
 
 Failure routes back to `gap_analyse` with feedback, up to `MAX_VERIFY_RETRIES`; after that
 the verdict is abandoned in favour of Insufficient Evidence rather than persisted.
 
-### Decision re-derivation (`reconcile_decision`)
+### Decision derivation (`score_clause` → `reconcile_decision`)
+
+The decision follows arithmetically from **weighted slot coverage**, over the slots that are
+`required` and not `not_applicable`:
 
 ```
-Step 2: any unmet finding with material=true → Not Met  (Insufficient Evidence if no grounded chunks)
-Step 3: all findings satisfied               → Met
-Step 4: anything else                        → Partially Met
+credit   = {filled: 1.0, partially_filled: 0.5, not_filled: 0.0}
+coverage = Σ(weight × credit) / Σ(weight)
+
+1. any `critical` slot contradicted by evidence → Not Met   (gate, overrides the bands)
+2. coverage ≥ 0.85                              → Met
+3. coverage ≥ 0.15                              → Partially Met
+4. otherwise                                    → Not Met
 ```
 
-`material` is set by the analyser on `unmet` findings only: `true` = a fundamental failure of a
-mandatory requirement, which fails the whole clause; `false` = an isolated deficiency inside an
-otherwise established process. Without it, `Not Met` required *every* finding to be unmet —
-unreachable for any clause with more than one sub-requirement, which is why Not Met recall was
-zero on the benchmark.
+**Why coverage rather than a conjunctive rule.** The previous rule required *every* required
+slot filled for `Met` and *zero* filled for `Not Met`. Measured slot marginals are
+`filled 52%`, `partially_filled 34%`, `not_filled 14%`, and clauses average 5.2 required slots —
+so `P(Met) ≈ 0.52^5 ≈ 4%` and `P(Not Met) ≈ 0.14^5 ≈ 0.006%`. Both classes were structurally
+unreachable and everything collapsed into `Partially Met`; the observed run matched the
+prediction (Met 5, Partially Met 26, Not Met 0). Decision class tracked *slot count*, not
+compliance — the clauses that reached `Met` were the two- and three-slot ones. Half-credit for
+`partially_filled` is what makes the result continuous: a third of all real answers are partial,
+and a conjunctive rule discards that information entirely.
 
-This mirrors the DECISION ORDER in `gap_analyse_system.j2` step for step, so prompt and code
-cannot disagree. Step 1 (evidence sufficiency) is handled upstream — `_route_after_grade`
-abstains below `MIN_RELEVANT_CHUNKS`, and `reconcile_decision` short-circuits on empty findings.
+**Why `Not Met` is a gate, not a low band.** Benchmark clause 6.1.2 is gold `Not Met` at
+coverage 0.79 — five of six required slots satisfied, but the one carrying the clause's core
+determination contradicted by an audit nonconformity. Averaging buries that. Conversely 7.4.2
+has an unfilled required slot and is gold `Partially Met`, because its gold reason reads
+"limited evidence that…" — absence of proof, not proof of absence. So the gate fires only on
+`critical` **and** `contradicted`, never on a slot that is merely empty. This mirrors the
+benchmark's own rubric, which states `NOT_MET` is "not used merely because a document is absent".
 
-`check_deterministic_grounding` additionally rejects a `Not Met` verdict that carries no
-`unmet` finding with `material: true`, routing it into the repair loop rather than letting
-reconciliation silently downgrade it.
+`weight` and `critical` are slot properties in `benchmark_slot_schemas.json`, authored from the
+ISO text; 66 of 184 slots are critical. Neither is an LLM judgement.
+
+A slot the fill step failed to report counts as `not_filled` — silence about a requirement is
+not evidence that it is satisfied. A clause whose required slots are all `not_applicable` falls
+back to its optional slots, and degrades to `Partially Met` rather than `Not Met` when none
+carries information: every obligation there is one the standard itself conditions, so asserting
+nonconformity would be a claim the evidence does not support. `Insufficient Evidence` is not
+reachable here — evidence sufficiency is settled upstream by `_route_after_grade`.
+
+The full derivation is persisted on the result as `decision_trace` (a `ClauseScore`): coverage,
+the band applied, the credit breakdown per slot, and any critical failures. The verdict can
+therefore be re-checked against its own arithmetic rather than against the prose the model wrote
+beside it — which has, in practice, disagreed with the recorded decision.
+
+`reconcile_decision` takes this as `derived_override`. Without one it falls back to deriving
+from the findings themselves (`any unmet + material → Not Met`; `all satisfied → Met`; else
+`Partially Met`) — the path clauses assessed before the slot layer still take.
+
+Findings are then rebuilt from the slots: `filled → satisfied`, `partially_filled → partial`,
+`not_filled → unmet`, with `material` taken from the slot's `required` flag and
+`not_applicable` slots emitting no finding at all. So `material` is now a property of the
+standard rather than something the model volunteers per run — see §2.1 for why that changed.
 
 ### Parent-clause aggregation (`pipeline/aggregation.py`)
 
@@ -527,15 +568,31 @@ is capped at 0.5, and a `[Reconciliation note: ...]` is appended to the reasonin
 
 Confidence is separately clamped to ≤ 0.5 when fewer than 2 grounded chunks support the verdict.
 
-### Abstain paths
+### Evidence sufficiency and abstain paths
 
-Both persist the fixed `_INSUFFICIENT` result — never a fabricated verdict:
+Every result carries `evidence_status`:
 
-1. Fewer than `MIN_RELEVANT_CHUNKS` survived evidence grading.
+| value | meaning |
+|---|---|
+| `sufficient` | enough graded evidence survived to judge normally |
+| `degraded` | too little survived the relevance filters, so the clause was judged on the top `MIN_RELEVANT_CHUNKS` chunks by rerank score and the verdict is flagged as weakly supported |
+| `none_retrieved` | retrieval returned nothing at all |
+
+The `degraded` path exists because abstaining was measurably worse than answering weakly: on the
+five-company benchmark, 7 of 38 clauses returned `Insufficient Evidence` — including 8.2 and 9.3,
+while the tenant's own corpus held `Emergency_Response_Plan` and `Management_Review_Minutes`.
+Gold assigned `Insufficient Evidence` to none of them, so each abstention was an outright error
+worth ~18 accuracy points between them. An absolute rerank-score floor is not a reliable signal
+that evidence is unusable.
+
+Two paths still persist the fixed `_INSUFFICIENT` result rather than a fabricated verdict:
+
+1. Nothing was retrieved at all — there is genuinely nothing to judge.
 2. The verdict could not be grounded within the retry budget.
 
-Failures inside `state_compare` / `gap_analyse` deliberately **propagate** — the actor
-records an `Error` decision instead of degrading to a plausible-looking Insufficient Evidence.
+Failures inside `slot_fill` / `gap_analyse` deliberately **propagate** — the actor records an
+`Error` decision instead of degrading to a plausible-looking Insufficient Evidence. For
+`slot_fill` this matters twice over: an empty fill would derive `Not Met` for the whole clause.
 
 ---
 
@@ -578,14 +635,18 @@ does not duplicate work.
 
 ## 7. Known gaps
 
-- **No accuracy benchmark.** There is no labeled evaluation set, so changes to prompts,
-  retrieval, or thresholds cannot currently be measured — only inspected. The pure functions
-  in `validation.py` (`reconcile_decision`, `_derive_decision_from_findings`,
-  `check_deterministic_grounding`) have no I/O and are directly unit-testable against
-  labeled cases; that is the cheapest place to start.
+- **No accuracy benchmark in the repo.** `tests/eval/golden_set.json` is a 9-row placeholder
+  that contradicts the gold labels used in development, so prompt, retrieval and threshold
+  changes cannot be scored — only inspected. The pure functions in `validation.py` and
+  `verdeai_shared/iso/slots.py` have no I/O and are directly unit-testable against labeled
+  cases; that is the cheapest place to start.
+- **Slot schemas are LLM-generated and unreviewed at scale.** `required` now decides clause
+  outcomes, so a wrong flag is a silent, systematic scoring error across every analysis of that
+  version. `--dry-run` and the admin API exist for exactly this; nobody has walked all 38.
 - **No clause cross-reference structure.** ISO 14001 clauses reference each other
   extensively ("the issues referred to in 4.1", "see 9.1, 9.2 and 9.3") and those references
   sit unused in the `requirements` text.
-- **No deontic modality.** `shall` (mandatory), `should` (recommendation) and `may`
-  (permission) are treated uniformly, so an unmet `should` can surface as a false gap.
+- **Deontic modality is only implicit.** `shall` / `should` / `may` are not distinguished in
+  the `requirements` prose; the slot schema's `required` flag is now the only place the
+  distinction is recorded, and it is inferred by the generating model rather than parsed.
 - **`keywords`** is generated per clause but consumed nowhere.

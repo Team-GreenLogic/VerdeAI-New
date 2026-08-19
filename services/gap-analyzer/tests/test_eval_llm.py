@@ -1,10 +1,27 @@
 import json
+import os
+
 import pytest
 
 from verdeai_shared.llm.openrouter_client import complete
 from verdeai_shared.settings import settings
 
 from tests.eval.faithfulness import COMPLETENESS_PROMPT, FAITHFULNESS_PROMPT
+
+# Every test here issues a real, billed OpenRouter completion and asserts on a
+# non-deterministic model response.
+#
+# Two guards, because one is not enough: the `llm` marker is deselected by addopts in the repo
+# root pyproject, but `services/gap-analyzer/pyproject.toml` becomes pytest's rootdir when the
+# suite is run from the service directory (which is how it runs in-container), and that config
+# does not carry the marker. The env guard holds regardless of rootdir.
+pytestmark = [
+    pytest.mark.llm,
+    pytest.mark.skipif(
+        os.getenv("RUN_LLM_TESTS") != "1",
+        reason="Billed LLM calls — set RUN_LLM_TESTS=1 to run",
+    ),
+]
 
 @pytest.mark.asyncio
 async def test_llm_judge_catches_hallucination():

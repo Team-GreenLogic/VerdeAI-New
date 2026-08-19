@@ -1,4 +1,4 @@
-.PHONY: up down logs seed-iso test test-e2e lint fmt clean test-auth
+.PHONY: up down logs seed-iso gen-slots test test-e2e lint fmt clean test-auth
 
 up:
 	docker compose up -d --build
@@ -16,8 +16,18 @@ logs:
 seed-iso:
 	docker compose run --rm iso-knowledge python -m app.cli seed
 
+# Generate slot-filling schemas for a version's clauses. Run --dry-run first (v=<version-id>)
+# and read the extraction questions — a weak schema degrades every analysis that follows.
+gen-slots:
+	docker compose run --rm iso-knowledge python -m app.generate_slot_schemas --version-id $(or $(v),iso-14001-benchmark) $(ARGS)
+
+# Shared + root suites run on the host; each service suite runs from its own directory inside
+# its container, because services define colliding top-level `app` packages and their
+# dependencies only exist in the image. Billed LLM tests are opt-in (RUN_LLM_TESTS=1).
 test:
-	pytest --tb=short -q
+	pytest --tb=short -q shared/tests tests
+	docker compose run --rm -T -w /app/service gap-analyzer sh -c "pip install -q pytest pytest-asyncio; python -m pytest tests --tb=short -q -p no:cacheprovider"
+	docker compose run --rm -T -w /app/service api-gateway sh -c "pip install -q pytest pytest-asyncio; python -m pytest tests --tb=short -q -p no:cacheprovider"
 
 test-e2e:
 	docker compose up -d --build

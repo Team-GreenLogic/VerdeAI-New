@@ -1,0 +1,25 @@
+Clause {{ clause_id }}: {{ clause_title }}
+
+Normative requirements prose:
+{{ clause_requirements }}
+
+Required output schema:
+{
+  "slots": [
+    {
+      "slot_id": "<snake_case_name>",
+      "label": "<short name>",
+      "question": "<detailed extraction instruction naming every acceptable answer form>",
+      "value_type": "text|person_or_role|date_or_period|quantity|document_reference|process_description|criteria|list_of_items|boolean",
+      "required": true,
+      "multiple": false,
+      "fill_rule": {
+        "filled": "<condition>",
+        "partially_filled": "<condition>",
+        "not_filled": "<condition>"
+      }
+    }
+  ]
+}
+
+Produce the JSON now.

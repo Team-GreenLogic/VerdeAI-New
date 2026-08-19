@@ -1,0 +1,29 @@
+Clause {{ clause_id }}: {{ clause_title }}
+
+ISO 14001 normative requirements for this clause (context only — answer the slots, not this):
+{{ clause_requirements }}
+
+Slots to fill:
+{{ slot_schema_json }}
+
+Organisation profile values:
+{{ org_profile_json }}
+
+Retrieved evidence chunks:
+{{ evidence_chunks }}
+
+Required output schema:
+{
+  "slot_fills": [
+    {
+      "slot_id": "<must match a slot_id above>",
+      "state": "filled|partially_filled|not_filled|not_applicable",
+      "value": "<the extracted answer, or \"\">",
+      "citation_ids": [<1-based chunk numbers>],
+      "contradicted": <true only if a cited chunk positively shows this is NOT done; false if merely absent>,
+      "notes": "<one sentence, or \"\">"
+    }
+  ]
+}
+
+Produce the JSON now.

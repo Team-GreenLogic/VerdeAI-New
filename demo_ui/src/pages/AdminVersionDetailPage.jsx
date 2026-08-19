@@ -7,6 +7,7 @@ import {
 } from '../api/admin.js'
 import { useJobProgress } from '../hooks/useJobProgress.js'
 import Spinner from '../components/Spinner.jsx'
+import { SlotSchemaList, SlotSummary } from '../components/Slots.jsx'
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
@@ -25,6 +26,53 @@ function StatusBadge({ status }) {
 }
 
 // ─── Clauses Tab ─────────────────────────────────────────────────────────────
+
+/**
+ * The slot schema for one clause: what information ISO requires, and which pieces are
+ * mandatory. `required` is what the gap analyser derives its verdict from, so this is
+ * worth reading before trusting a run — see docs/gap-analysis.md §2.1.
+ */
+function ClauseSlots({ clause }) {
+  const [open, setOpen] = useState(false)
+  const slots = clause.slot_schema || []
+
+  // A title-only ISO heading (6.1, 6.2, 7.4, 7.5, 9.1, 9.2 — verified against ISO 14001:2015;
+  // the normative "shall" text starts only at the .1 sub-clause) has no requirements of its
+  // own, so it deliberately has no schema — distinct from a leaf clause whose schema simply
+  // hasn't been generated yet. Conflating the two used to read as "this needs make gen-slots".
+  if (clause.title_only) {
+    return (
+      <p className="mt-2 text-[11px] text-slate-400">
+        Section — derived from sub-clauses, not independently analysed.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-amber-600 transition-colors"
+      >
+        <svg
+          className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        Requirement slots
+        {slots.length > 0
+          ? <SlotSummary slots={slots} />
+          : <span className="text-[11px] text-slate-400 font-normal">not generated</span>}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <SlotSchemaList slots={slots} />
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ClauseEditor({ vid, clause, onSaved, onCancel }) {
   const [form, setForm] = useState({
@@ -225,6 +273,7 @@ function ClausesTab({ vid, version }) {
                           ))}
                         </div>
                       )}
+                      <ClauseSlots clause={c} />
                     </div>
                     {isEditable && (
                       <div className="flex items-center gap-1.5 flex-shrink-0">

@@ -1,0 +1,59 @@
+{
+  "api": "http://localhost:8000",
+  "version_id": "iso-14001-benchmark",
+  "companies": {
+    "B": {
+      "company_folder": "B_Seabrook_Dairy_Foods",
+      "email": "benchmark-b@verdeai-benchmark.com",
+      "tenant_id": "8e343b80-114b-4a8b-b14a-12e25008454a",
+      "documents": 22,
+      "document_status": {
+        "ready": 22
+      },
+      "analysis_id": "fddec03e-1585-4228-beeb-e9fce14b5736"
+    },
+    "A": {
+      "company_folder": "A_Rivermark_Metal_Finishing",
+      "email": "benchmark-a@verdeai-benchmark.com",
+      "tenant_id": "4156b07a-156f-470e-a032-afb8fc90ea7e",
+      "documents": 27,
+      "document_status": {
+        "ready": 27
+      },
+      "analysis_id": "0e16c435-5f19-45ad-bfd2-989f37450cb6"
+    },
+    "C": {
+      "company_folder": "C_ApexChem_Logistics",
+      "email": "benchmark-c@verdeai-benchmark.com",
+      "tenant_id": "8866bee4-80a9-42a0-993a-e4bc7f5b6b7c",
+      "documents": 23,
+      "document_status": {
+        "parsed": 1,
+        "ready": 22
+      },
+      "analysis_id": "6f0d96df-d0b3-4e22-9955-7bab35f9b902"
+    },
+    "D": {
+      "company_folder": "D_NovaCircuit_Electronics",
+      "email": "benchmark-d@verdeai-benchmark.com",
+      "tenant_id": "7cfe00c8-081e-469c-8e65-4c5f5bea870a",
+      "documents": 20,
+      "document_status": {
+        "parsed": 1,
+        "ready": 19
+      },
+      "analysis_id": "5c999fae-1b87-4051-a1e6-3ea05404ec9f"
+    },
+    "E": {
+      "company_folder": "E_Coral_Bay_Resort",
+      "email": "benchmark-e@verdeai-benchmark.com",
+      "tenant_id": "fb7cdac2-13c3-4179-886d-a12e18c43b74",
+      "documents": 23,
+      "document_status": {
+        "parsed": 1,
+        "ready": 22
+      },
+      "analysis_id": "e76e110c-52d7-4b4c-b33f-1a5cbb1ff538"
+    }
+  }
+}

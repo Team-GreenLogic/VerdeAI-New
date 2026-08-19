@@ -40,3 +40,16 @@ services:
       - ./shared:/app/shared:ro
       - ./services/chat-rag:/app/service:ro
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+  # DO NOT COMMIT THIS BLOCK — the value is machine-specific.
+  #
+  # mongodb-atlas-local runs mongod with `--replSet $(hostname)`, so the replica-set
+  # name is the hostname of whichever container first initialised the volume. Docker
+  # assigns a random hostname per container, so `up --force-recreate` breaks the match:
+  # mongod fails isSelf, never elects a primary, and the runner wrapper panics with
+  # "ReplicaSetNoPrimary ... Servers: []" (exit 2).
+  #
+  # Pinning the hostname to this volume's existing set name makes it stable. Each
+  # developer's volume has a different set name, so this value is not portable.
+  mongodb:
+    hostname: af8e9a9a894f

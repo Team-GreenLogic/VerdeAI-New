@@ -10,6 +10,7 @@ import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 import MarkdownContent from '../components/MarkdownContent.jsx'
 import StalenessBanner from '../components/StalenessBanner.jsx'
+import { SlotFillList, SlotFillSummary, CoverageBar, ChildrenSummary } from '../components/Slots.jsx'
 
 const ACTIVE = ['pending', 'running', 'paused']
 const DONE   = ['complete', 'failed']
@@ -294,6 +295,52 @@ function GapResultsTab({ analysisId, version }) {
             </button>
             {expanded === r.clause_id && (
               <div className={`px-4 pb-4 pt-2 bg-slate-50 border-l-4 space-y-3 ${expandedBorder(r.decision)}`}>
+                {r.decision_trace?.coverage != null && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                      How this decision was derived
+                    </p>
+                    <CoverageBar trace={r.decision_trace} />
+                  </div>
+                )}
+                {r.evidence_status === 'degraded' && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                    Evidence for this clause scored below the relevance threshold. It was assessed
+                    on the best available chunks, so treat this verdict as weakly supported.
+                  </p>
+                )}
+                <div>
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      {r.children_summary ? 'Sub-clauses' : 'Requirement slots'}
+                    </p>
+                    {!r.children_summary && <SlotFillSummary fills={r.slot_fills} slots={r.slot_schema} />}
+                  </div>
+                  {r.children_summary ? (
+                    // A title-only ISO heading (e.g. 6.2) — no requirements of its own, so no
+                    // slot_fills to show for it directly. Everything here is real detail from
+                    // its children, pooled — never a fabricated schema for 6.2 itself.
+                    <ChildrenSummary summary={r.children_summary} />
+                  ) : r.slot_fills?.length > 0 ? (
+                    <>
+                      <p className="text-[11px] text-slate-400 mb-2">
+                        What ISO requires for this clause, and what the evidence established. The
+                        decision above is derived from these states, not judged separately — click a
+                        slot to see the question it was asked.
+                      </p>
+                      <SlotFillList fills={r.slot_fills} slots={r.slot_schema} />
+                    </>
+                  ) : (
+                    // No fills means the pipeline never reached the slot-filling step: retrieval
+                    // returned too little relevant evidence and the clause abstained. Rendering
+                    // nothing here reads as a UI fault, so say what actually happened.
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      {r.decision === 'Insufficient Evidence'
+                        ? 'No slots were filled — too little relevant evidence was retrieved for this clause, so the analysis stopped before the requirement slots were assessed. This is a retrieval outcome, not a judgement that the requirement is unmet.'
+                        : 'No slots were recorded for this clause. It was analysed before requirement slots were introduced.'}
+                    </p>
+                  )}
+                </div>
                 <div>
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Reasoning</p>
                   <p className="text-xs text-slate-700 leading-relaxed">{r.reasoning}</p>
@@ -611,6 +658,21 @@ export default function AnalysisDetailPage() {
       {/* Staleness banner — documents changed since this analysis ran */}
       {analysis.status === 'complete' && (
         <StalenessBanner staleness={staleness} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />
+      )}
+
+      {/* A run whose status reads "complete" can still have lost clauses to errors. Saying so
+          here is the difference between a truncated audit and one that looks finished. */}
+      {analysis.error_count > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-semibold text-red-800">
+            {analysis.error_count} of {analysis.clause_total ?? '?'} clauses failed to analyse
+          </p>
+          <p className="text-xs text-red-700 mt-0.5 leading-relaxed">
+            These clauses are shown with an <span className="font-semibold">Error</span> decision
+            and carry no verdict. This report is incomplete — re-run the analysis to attempt them
+            again.
+          </p>
+        </div>
       )}
 
       {/* Delta badge — this analysis was an incremental re-run */}

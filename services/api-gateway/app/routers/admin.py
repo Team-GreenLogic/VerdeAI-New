@@ -68,6 +68,11 @@ class ClauseCreate(BaseModel):
     requirements: str
     keywords: list[str] = []
     search_query: str = ""
+    # True for a heading clause with no normative text of its own (ISO 14001's 6.1, 6.2,
+    # 7.4, 7.5, 9.1, 9.2 — the "shall" text starts only at the .1 sub-clause). Such a clause
+    # carries no slot_schema and is never independently analysed; its result is entirely
+    # aggregated from its children. See verdeai_shared.iso.slots.clause_slot_schema.
+    title_only: bool = False
 
 
 class ClauseUpdate(BaseModel):
@@ -75,6 +80,10 @@ class ClauseUpdate(BaseModel):
     requirements: str | None = None
     keywords: list[str] | None = None
     search_query: str | None = None
+    # The slot schema drives the gap analyser's decision (see verdeai_shared.iso.slots),
+    # so it is editable here: a wrong `required` flag is a data fix, not a prompt change.
+    slot_schema: list[dict[str, Any]] | None = None
+    title_only: bool | None = None
 
 
 class ClauseDetail(BaseModel):
@@ -85,6 +94,8 @@ class ClauseDetail(BaseModel):
     requirements: str
     keywords: list[str]
     search_query: str = ""
+    slot_schema: list[dict[str, Any]] = []
+    title_only: bool = False
 
 
 class TemplateFieldUpdate(BaseModel):
@@ -127,6 +138,8 @@ def _clause_to_detail(c: dict[str, Any]) -> ClauseDetail:
         requirements=c.get("requirements", ""),
         keywords=c.get("keywords", []),
         search_query=c.get("search_query", ""),
+        slot_schema=c.get("slot_schema", []),
+        title_only=c.get("title_only", False),
     )
 
 
@@ -277,6 +290,7 @@ async def create_clause(version_id: str, body: ClauseCreate, principal: CurrentA
         "keywords": body.keywords,
         "search_query": body.search_query,
         "embedding": embeddings[0],
+        "title_only": body.title_only,
     }
     await repo.upsert(doc)
 
@@ -307,6 +321,13 @@ async def update_clause(version_id: str, clause_id: str, body: ClauseUpdate, pri
         updates["keywords"] = body.keywords
     if body.search_query is not None:
         updates["search_query"] = body.search_query
+    if body.slot_schema is not None:
+        # Modeled as editable since slot_schema was first exposed here, but never actually
+        # applied — a `required`/`critical` fix submitted through this endpoint silently
+        # had no effect. Fixed alongside title_only since both are schema-shape fields.
+        updates["slot_schema"] = body.slot_schema
+    if body.title_only is not None:
+        updates["title_only"] = body.title_only
 
     # Re-embed if title or requirements changed
     if "title" in updates or "requirements" in updates:

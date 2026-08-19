@@ -9,6 +9,7 @@ declared in settings but never actually used by any call site).
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
@@ -43,6 +44,86 @@ def _repair_message(bad_output: str, error: str, schema: type[BaseModel]) -> dic
     }
 
 
+_TRANSPORT_ATTEMPTS = 3
+_TRANSPORT_BACKOFF_SECONDS = 2.0
+
+
+def _is_transport_error(exc: Exception) -> bool:
+    """A dropped connection or upstream 5xx/429, as opposed to a bad response body.
+
+    Matched on message text rather than exception type because the failure surfaces from
+    several layers (httpx, the OpenAI SDK, OpenRouter itself) with no shared base class.
+    The observed benchmark failure was httpx's "peer closed connection without sending
+    complete message body (incomplete chunked read)" mid-stream.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        marker in text
+        for marker in (
+            "peer closed connection",
+            "incomplete chunked read",
+            "connection reset",
+            "connection error",
+            "server disconnected",
+            "remote protocol error",
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "429",
+            "500",
+            "502",
+            "503",
+            "504",
+        )
+    )
+
+
+async def _stream_with_transport_retry(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    temperature: float,
+    max_tokens: int,
+    on_thinking: Callable[[str], Awaitable[None]] | None,
+    name: str | None,
+) -> str:
+    """Retry the streaming call when the transport fails, not the schema.
+
+    ``LLM_MAX_RETRIES`` governs schema repair — it only engages once a response body exists.
+    A connection dropped mid-stream produces no body at all, so it bypassed that loop entirely
+    and propagated as a hard clause failure. On a five-company benchmark run this cost 30 of
+    190 clauses, every one of them to the same dropped-connection error, with three workers
+    streaming concurrently.
+    """
+    last: Exception | None = None
+    for attempt in range(1, _TRANSPORT_ATTEMPTS + 1):
+        try:
+            return await stream_with_reasoning(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+                on_thinking=on_thinking,
+                name=name,
+            )
+        except Exception as exc:  # re-raised below unless retryable
+            if not _is_transport_error(exc) or attempt == _TRANSPORT_ATTEMPTS:
+                raise
+            last = exc
+            delay = _TRANSPORT_BACKOFF_SECONDS * attempt
+            logger.warning(
+                "LLM transport failure — retrying",
+                name=name,
+                attempt=attempt,
+                max_attempts=_TRANSPORT_ATTEMPTS,
+                delay_seconds=delay,
+                error=str(exc),
+            )
+            await asyncio.sleep(delay)
+    raise last if last else RuntimeError("unreachable")
+
+
 async def stream_structured(
     *,
     model: str,
@@ -56,18 +137,19 @@ async def stream_structured(
 ) -> SchemaT:
     """Stream a completion and validate it against ``schema``, repairing on failure.
 
-    The first attempt streams (preserving reasoning-token callbacks for the UI).
-    Repair attempts use a non-streaming call since they are a short-lived fallback
-    path, not the primary UX.
+    The first attempt streams (preserving reasoning-token callbacks for the UI) and is
+    retried on a transport failure (dropped connection, timeout, upstream 5xx/429) — see
+    ``_stream_with_transport_retry``. Repair attempts, once a response body exists but fails
+    schema validation, use a non-streaming call since they are a short-lived fallback path,
+    not the primary UX.
     """
     max_retries = settings.LLM_MAX_RETRIES if retries is None else retries
 
-    raw = await stream_with_reasoning(
+    raw = await _stream_with_transport_retry(
         model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
-        response_format={"type": "json_object"},
         on_thinking=on_thinking,
         name=name,
     )

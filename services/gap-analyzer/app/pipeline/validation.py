@@ -76,8 +76,16 @@ def count_grounded_chunk_citations(citations: list[Citation], num_chunks: int) -
     )
 
 
-def check_deterministic_grounding(verdict: GapVerdict, num_chunks: int) -> tuple[bool, list[str]]:
-    """Hard, rule-based grounding checks. Returns (passed, reasons_for_failure)."""
+def check_deterministic_grounding(
+    verdict: GapVerdict, num_chunks: int, require_material_for_not_met: bool = True
+) -> tuple[bool, list[str]]:
+    """Hard, rule-based grounding checks. Returns (passed, reasons_for_failure).
+
+    ``require_material_for_not_met`` is switched off when the clause was assessed by slot
+    filling: materiality then comes from the slot schema's ``required`` flag and the
+    findings are rebuilt in reconciliation, so there is nothing for the model to record
+    and failing it here would send a correct verdict into the repair loop.
+    """
     reasons: list[str] = []
 
     grounded_citations, drop_warnings = ground_citations(verdict.citations, num_chunks)
@@ -91,8 +99,10 @@ def check_deterministic_grounding(verdict: GapVerdict, num_chunks: int) -> tuple
     # Step 2 of the decision order requires the failure to be recorded on a finding. Without
     # this, a "Not Met" with no material finding is silently downgraded by reconciliation;
     # failing here instead routes it into the bounded repair loop so the model can fix it.
-    if verdict.decision == "Not Met" and not any(
-        f.status == "unmet" and f.material for f in verdict.findings
+    if (
+        require_material_for_not_met
+        and verdict.decision == "Not Met"
+        and not any(f.status == "unmet" and f.material for f in verdict.findings)
     ):
         reasons.append(
             "Decision 'Not Met' requires at least one finding with status='unmet' and material=true."
@@ -138,19 +148,24 @@ def reconcile_decision(
     llm_decision: str,
     llm_confidence: float,
     grounded_chunk_count: int,
+    derived_override: str | None = None,
 ) -> dict[str, Any]:
-    """Reconcile the LLM's decision against a decision derived from findings.
+    """Reconcile the LLM's decision against a deterministically derived one.
 
-    When findings are available and disagree with the LLM's stated decision, the
-    deterministic, findings-derived decision wins (with reduced confidence) rather
-    than trusting the model verbatim.
+    When the derived decision disagrees with the LLM's stated decision, the derived one
+    wins (with reduced confidence) rather than trusting the model verbatim.
+
+    ``derived_override`` supplies that decision from outside — the slot-completeness rule
+    in ``verdeai_shared.iso.slots.derive_clause_state``. Without it the decision is derived
+    from the findings themselves, which is what clauses assessed before the slot layer, and
+    the unit tests covering that path, still rely on.
     """
     confidence = clamp_confidence_for_evidence(llm_confidence, grounded_chunk_count)
 
-    if not findings:
+    if derived_override is None and not findings:
         return {"decision": llm_decision, "confidence": confidence, "note": None}
 
-    derived = _derive_decision_from_findings(findings, grounded_chunk_count)
+    derived = derived_override or _derive_decision_from_findings(findings, grounded_chunk_count)
     if derived == llm_decision:
         return {"decision": llm_decision, "confidence": confidence, "note": None}
 

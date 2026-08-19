@@ -6,7 +6,8 @@ Populates:
   - org_profile        (blank entries for demo tenant)
   - iso_clauses_vector_idx  (Atlas Vector Search index)
   - the benchmark version (``data/benchmark_clauses.json``) as a separate
-    published ISO version — see ``seed_benchmark_version``
+    published ISO version, with its hand-authored slot schemas
+    (``data/benchmark_slot_schemas.json``) applied — see ``seed_benchmark_version``
 
 Safe to re-run — all writes are idempotent upserts.
 """
@@ -614,7 +615,9 @@ async def seed_benchmark_version(db: Any) -> None:
 
     Kept separate from the default seed so gap-analysis runs can be pointed at a
     fixed reference clause set. Idempotent: skips the embed step when the clauses
-    are already present.
+    are already present, but always (re-)applies the hand-authored slot schemas —
+    see ``_apply_benchmark_slot_schemas`` — so a fresh install gets the full
+    slot-filling clause set with no separate LLM generation step required.
     """
     clauses = load_benchmark_clauses()
     if not clauses:
@@ -631,21 +634,35 @@ async def seed_benchmark_version(db: Any) -> None:
     })
 
     existing = await db.iso_clauses.count_documents({"version_id": BENCHMARK_VERSION_ID})
-    if existing >= len(clauses):
+    if existing < len(clauses):
+        # Same embedding formula as seed_clauses / the AI build pipeline.
+        texts = [f"{c.get('title', '')}\n{c.get('requirements', '')}" for c in clauses]
+        logger.info("Embedding benchmark clauses", count=len(texts), version_id=BENCHMARK_VERSION_ID)
+        embeddings = await embed_documents(texts)
+
+        repo = ISOClausesRepository(db)
+        for clause, emb in zip(clauses, embeddings):
+            await repo.upsert({**clause, "version_id": BENCHMARK_VERSION_ID, "embedding": emb})
+
+        await seed_state_template(db, BENCHMARK_VERSION_ID, clauses=clauses)
+        logger.info("Benchmark version seeded", version_id=BENCHMARK_VERSION_ID, clauses=len(clauses))
+    else:
         logger.info("Benchmark clauses already seeded — skipping embed", count=existing)
-        return
 
-    # Same embedding formula as seed_clauses / the AI build pipeline.
-    texts = [f"{c.get('title', '')}\n{c.get('requirements', '')}" for c in clauses]
-    logger.info("Embedding benchmark clauses", count=len(texts), version_id=BENCHMARK_VERSION_ID)
-    embeddings = await embed_documents(texts)
+    await _apply_benchmark_slot_schemas(db)
 
-    repo = ISOClausesRepository(db)
-    for clause, emb in zip(clauses, embeddings):
-        await repo.upsert({**clause, "version_id": BENCHMARK_VERSION_ID, "embedding": emb})
 
-    await seed_state_template(db, BENCHMARK_VERSION_ID, clauses=clauses)
-    logger.info("Benchmark version seeded", version_id=BENCHMARK_VERSION_ID, clauses=len(clauses))
+async def _apply_benchmark_slot_schemas(db: Any) -> None:
+    """Write the hand-authored slot schemas onto the benchmark version's clauses.
+
+    No LLM call — ``data/benchmark_slot_schemas.json`` is checked into git, so this
+    runs on every ``make seed-iso`` and every fresh install ends up with the same
+    slot-filling clause set the benchmark was scored against, without needing
+    ``make gen-slots``.
+    """
+    from app.generate_slot_schemas import apply_authored_schemas
+
+    await apply_authored_schemas(BENCHMARK_VERSION_ID)
 
 
 async def _backfill_version_id(db: Any) -> None:

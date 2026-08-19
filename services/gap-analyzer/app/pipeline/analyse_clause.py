@@ -2,8 +2,8 @@
 
 Each ISO clause is analysed through a validated pipeline:
   embed → retrieve → grade_evidence → [conditional]
-                       ├─ (enough relevant evidence) → load_org_profile → load_state_template
-                       │      → state_compare → gap_analyse → verify_grounding → [conditional]
+                       ├─ (enough relevant evidence) → load_org_profile → load_slot_schema
+                       │      → slot_fill → gap_analyse → verify_grounding → [conditional]
                        │            ├─ (grounded)            → reconcile → persist → END
                        │            ├─ (ungrounded, retries left) → gap_analyse  (repair loop)
                        │            └─ (ungrounded, exhausted)  → insufficient_persist → END
@@ -34,15 +34,19 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
-from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.result_store import ResultStoreRepository
-from verdeai_shared.iso.requirements import clause_requirements_list
+from verdeai_shared.iso.slots import (
+    SlotFillResult,
+    clause_slot_schema,
+    score_clause,
+    slot_fills_to_findings,
+)
 from verdeai_shared.llm.structured import stream_structured
 from verdeai_shared.retrieval.embedder import embed_query
 from verdeai_shared.retrieval.hybrid import hybrid_retrieve
 from verdeai_shared.settings import settings
 
-from app.pipeline.schemas import EvidenceGrade, GapVerdict, GroundednessResult, StateDiff
+from app.pipeline.schemas import EvidenceGrade, GapVerdict, GroundednessResult, SubRequirementFinding
 from app.pipeline.validation import (
     check_deterministic_grounding,
     count_grounded_chunk_citations,
@@ -82,8 +86,8 @@ _STEPS: list[tuple[str, str]] = [
     ("retrieve",          "Retrieving relevant evidence…"),
     ("grade_evidence",    "Grading evidence relevance…"),
     ("load_profile",      "Loading organisation profile…"),
-    ("load_template",     "Loading ISO state template…"),
-    ("state_compare",     "Comparing state against evidence…"),
+    ("load_template",     "Loading ISO requirement slots…"),
+    ("state_compare",     "Filling requirement slots from evidence…"),
     ("gap_analyse",       "Running gap analysis…"),
     ("verify_grounding",  "Verifying evidence grounding…"),
     ("reconcile",         "Reconciling final decision…"),
@@ -111,8 +115,9 @@ class ClauseState(TypedDict, total=False):
     chunks: list[dict[str, Any]]
     evidence_text: str
     org_profile_map: dict[str, Any]
-    state_template_list: list[dict[str, Any]]
-    state_diff: dict[str, Any]
+    evidence_status: str
+    slot_schema: list[dict[str, Any]]
+    slot_fills: list[dict[str, Any]]
     gap_result: dict[str, Any]
     verify_attempts: int
     grounding_passed: bool
@@ -272,17 +277,37 @@ async def _grade_evidence_node(state: ClauseState, config: RunnableConfig) -> di
                 max_tokens=1024,
                 name="evidence_grade",
             )
-            if grade.relevant_indices:
-                relevant = set(grade.relevant_indices)
-                kept = [c for i, c in enumerate(score_filtered, 1) if i in relevant]
+            # Three distinct outcomes. Previously `if grade.relevant_indices:` collapsed the
+            # first two, so a grader rejecting EVERYTHING fell through and kept the whole list,
+            # while a grader endorsing ONE chunk dropped to 1 and abstained below
+            # MIN_RELEVANT_CHUNKS — "all irrelevant" was more permissive than "one relevant".
+            relevant = set(grade.relevant_indices)
+            kept = [c for i, c in enumerate(score_filtered, 1) if i in relevant]
         except Exception as exc:
             logger.warning(
                 "Evidence grading LLM call failed — falling back to rerank-score filter only",
                 clause_id=clause_id, error=str(exc),
             )
 
+    # Relative floor. An absolute RERANK_SCORE_THRESHOLD plus a strict grader can starve a
+    # clause whose evidence demonstrably exists — benchmark clauses 8.2 and 9.3 abstained while
+    # the tenant held Emergency_Response_Plan and Management_Review_Minutes. Where chunks were
+    # retrieved at all, keep the best few and mark the verdict degraded rather than abstaining:
+    # a flagged weak answer is more useful to an auditor than a silent refusal.
+    evidence_status = "sufficient"
+    if len(kept) < settings.MIN_RELEVANT_CHUNKS and chunks:
+        ranked = sorted(chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)
+        kept = ranked[: settings.MIN_RELEVANT_CHUNKS]
+        evidence_status = "degraded"
+        logger.info(
+            "Evidence below threshold — proceeding on top-ranked chunks",
+            clause_id=clause_id, kept=len(kept), retrieved=len(chunks),
+        )
+    elif not chunks:
+        evidence_status = "none_retrieved"
+
     evidence_text = _format_chunks(kept) if kept else ""
-    return {"chunks": kept, "evidence_text": evidence_text}
+    return {"chunks": kept, "evidence_text": evidence_text, "evidence_status": evidence_status}
 
 
 async def _load_org_profile_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
@@ -296,42 +321,39 @@ async def _load_org_profile_node(state: ClauseState, config: RunnableConfig) -> 
     return {"org_profile_map": {e["field_path"]: e.get("value") for e in org_entries}}
 
 
-async def _load_state_template_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
-    """Build the assertion-level template state_compare will evaluate against.
+async def _load_slot_schema_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
+    """Load the slot schema the fill step will answer — what information ISO requires.
 
-    Prefers the clause's decomposed ``requirements_list`` (LLM-curated or, absent
-    that, a deterministic sentence split — see ``verdeai_shared.iso.requirements``)
-    so state_compare reasons about atomic, checkable obligations instead of the
-    3 generic legacy fields. Falls back to the legacy ISOStateRepository template
-    only if a clause has no requirements text to decompose at all.
+    Prefers the clause's generated ``slot_schema`` (see
+    ``services/iso-knowledge/app/generate_slot_schemas.py``); ``clause_slot_schema``
+    synthesizes one from ``requirements_list`` when a clause has not been migrated,
+    so there is a single code path and no un-slotted clause to special-case.
     """
     await _emit_step("load_template", config)
-    clause = state["clause"]
-    clause_id: str = clause["clause_id"]
+    schema = clause_slot_schema(state["clause"])
 
-    reqs = clause_requirements_list(clause)
-    if reqs:
-        state_template_list = [
-            {"field_path": r["id"], "label": r["text"], "field_type": "requirement", "default": None}
-            for r in reqs
-        ]
-    else:
-        cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
-        state_entries = await ISOStateRepository(cfg["db"]).list_for_clause(clause_id)
-        state_template_list = [
-            {
-                "field_path": e["field_path"],
-                "label": e.get("label"),
-                "field_type": e.get("field_type"),
-                "default": e.get("default"),
-            }
-            for e in state_entries
-        ]
-    return {"state_template_list": state_template_list}
+    # A schema with no critical slot can never reach Not Met through the gate, only through the
+    # low-coverage floor. That is a legitimate shape for a synthesized schema, but for a curated
+    # one it means the authored flags never reached the database — which silently disabled the
+    # gate across a whole benchmark run once already. Log it rather than let it pass unseen.
+    if schema and not any(s.get("critical") for s in schema):
+        logger.warning(
+            "Clause schema has no critical slot — Not Met reachable only via low coverage",
+            clause_id=state["clause"].get("clause_id"),
+            slots=len(schema),
+        )
+
+    return {"slot_schema": schema}
 
 
 @observe(as_type="generation")  # type: ignore[misc]
-async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
+async def _slot_fill_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
+    """Answer each slot's extraction question from the evidence.
+
+    Deliberately not a compliance judgement: the model records how completely each
+    piece of required information could be established, and the clause decision is
+    derived from those states in ``_reconcile_node``.
+    """
     await _emit_step("state_compare", config)
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
     clause = state["clause"]
@@ -339,31 +361,30 @@ async def _state_compare_node(state: ClauseState, config: RunnableConfig) -> dic
     clause_title: str = clause.get("title", clause_id)
     on_thinking: Callable[[str], Awaitable[None]] | None = cfg.get("on_thinking")
 
-    system_prompt = _jinja.get_template("state_compare_system.j2").render()
-    user_prompt = _jinja.get_template("state_compare_user.j2").render(
+    system_prompt = _jinja.get_template("slot_fill_system.j2").render()
+    user_prompt = _jinja.get_template("slot_fill_user.j2").render(
         clause_id=clause_id,
         clause_title=clause_title,
         clause_requirements=clause.get("requirements", ""),
+        slot_schema_json=json.dumps(state.get("slot_schema", []), indent=2),
         org_profile_json=json.dumps(state.get("org_profile_map", {}), indent=2),
-        state_template_json=json.dumps(state.get("state_template_list", []), indent=2),
         evidence_chunks=state.get("evidence_text", ""),
     )
-    # No try/except here: a hard failure (malformed JSON that can't be repaired,
-    # or a transport error) propagates so the actor records a proper Error decision
-    # instead of the previous silent degrade-to-{} that let gap_analyse run on an
-    # empty state_diff and still produce a verdict.
-    diff: StateDiff = await stream_structured(
+    # No try/except here: a hard failure (malformed JSON that can't be repaired, or a
+    # transport error) propagates so the actor records a proper Error decision. Degrading
+    # to an empty fill would silently derive "Not Met" for the whole clause.
+    result: SlotFillResult = await stream_structured(
         model=settings.PRIMARY_REASONING_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
         ],
-        schema=StateDiff,
+        schema=SlotFillResult,
         max_tokens=8192,
         on_thinking=on_thinking,
-        name="state_compare",
+        name="slot_fill",
     )
-    return {"state_diff": diff.model_dump()}
+    return {"slot_fills": [f.model_dump() for f in result.slot_fills]}
 
 
 @observe(as_type="generation")  # type: ignore[misc]
@@ -381,15 +402,14 @@ async def _gap_analyse_node(state: ClauseState, config: RunnableConfig) -> dict[
     if status_doc and status_doc.get("status") == "paused":
         raise AnalysisPaused(analysis_id)
 
-    state_diff = state.get("state_diff", {})
     prior_verdict = cfg.get("prior_verdict")
     system_prompt = _jinja.get_template("gap_analyse_system.j2").render()
     user_prompt = _jinja.get_template("gap_analyse_user.j2").render(
         clause_id=clause_id,
         clause_title=clause_title,
         clause_requirements=clause.get("requirements", ""),
-        state_diff_json=json.dumps(state_diff.get("state_diff", {}), indent=2),
-        reference_context_json=json.dumps(state_diff.get("reference_context", {}), indent=2),
+        slot_schema_json=json.dumps(state.get("slot_schema", []), indent=2),
+        slot_fills_json=json.dumps(state.get("slot_fills", []), indent=2),
         evidence_chunks=state.get("evidence_text", ""),
         prior_verdict=prior_verdict,
     )
@@ -440,7 +460,12 @@ async def _verify_grounding_node(state: ClauseState, config: RunnableConfig) -> 
     verdict = GapVerdict.model_validate(state.get("gap_result", {}))
     num_chunks = len(state.get("chunks", []))
 
-    det_passed, det_reasons = check_deterministic_grounding(verdict, num_chunks)
+    # Materiality is a property of the slot schema, not of this verdict, so the "Not Met
+    # needs a material unmet finding" rule has nothing to enforce once slots are filled —
+    # _reconcile_node derives both the decision and the findings from the slot states.
+    det_passed, det_reasons = check_deterministic_grounding(
+        verdict, num_chunks, require_material_for_not_met=not state.get("slot_fills")
+    )
 
     judge_grounded = True
     judge_reasons: list[str] = []
@@ -487,23 +512,59 @@ async def _verify_grounding_node(state: ClauseState, config: RunnableConfig) -> 
 
 @observe(as_type="span")  # type: ignore[misc]
 async def _reconcile_node(state: ClauseState, config: RunnableConfig) -> dict[str, Any]:
-    """Derive the final decision/confidence from grounded findings rather than
-    trusting the LLM's stated decision verbatim, and strip any citation that
-    didn't survive grounding before persisting.
+    """Derive the final decision from slot completeness rather than trusting the LLM's
+    stated decision verbatim, and strip any citation that didn't survive grounding.
+
+    The findings are replaced by the slot-derived ones: ``material`` then reflects the
+    schema's ``required`` flag instead of a per-run model judgement, which is the whole
+    reason the slot layer exists. The model's own findings are still what the groundedness
+    judge saw upstream, so nothing is lost by overwriting them here.
     """
     await _emit_step("reconcile", config)
     verdict = GapVerdict.model_validate(state.get("gap_result", {}))
     num_chunks = len(state.get("chunks", []))
+    schema = state.get("slot_schema", [])
+    fills = state.get("slot_fills", [])
 
     grounded_citations, _ = ground_citations(verdict.citations, num_chunks)
     grounded_chunk_count = count_grounded_chunk_citations(grounded_citations, num_chunks)
 
+    # An empty schema means the clause carries no requirements text to decompose at all.
+    # Scoring zero slots would read as "no required information established", so fall back to
+    # the findings-derived decision instead.
+    score = None
+    if schema:
+        findings = [
+            SubRequirementFinding.model_validate(f) for f in slot_fills_to_findings(schema, fills)
+        ]
+        score = score_clause(schema, fills)
+        derived: str | None = score.decision
+    else:
+        findings = verdict.findings
+        derived = None
+
     outcome = reconcile_decision(
-        verdict.findings, verdict.decision, verdict.confidence, grounded_chunk_count
+        findings,
+        verdict.decision,
+        verdict.confidence,
+        grounded_chunk_count,
+        derived_override=derived,
     )
 
     gap_result = verdict.model_dump()
     gap_result["citations"] = [c.model_dump() for c in grounded_citations]
+    gap_result["findings"] = [f.model_dump() for f in findings]
+    # Both the answers and the schema they were judged against. Schemas are edited over time,
+    # so a result that stored only the fills would later be read against a schema that no
+    # longer matches it — the labels, questions and required flags would drift out from under
+    # the verdict they produced.
+    gap_result["slot_fills"] = fills
+    gap_result["slot_schema"] = schema
+    gap_result["evidence_status"] = state.get("evidence_status", "sufficient")
+    # The arithmetic that produced the decision, stored so the verdict can be re-checked
+    # against its own derivation rather than against the prose the model wrote beside it.
+    if score is not None:
+        gap_result["decision_trace"] = score.model_dump()
     gap_result["decision"] = outcome["decision"]
     gap_result["confidence"] = outcome["confidence"]
     if outcome["note"]:
@@ -583,8 +644,8 @@ def _build_clause_graph() -> Any:  # returns CompiledStateGraph
     g.add_node("retrieve",             _retrieve_node)
     g.add_node("grade_evidence",       _grade_evidence_node)
     g.add_node("load_org_profile",     _load_org_profile_node)
-    g.add_node("load_state_template",  _load_state_template_node)
-    g.add_node("state_compare",        _state_compare_node)
+    g.add_node("load_slot_schema",     _load_slot_schema_node)
+    g.add_node("slot_fill",            _slot_fill_node)
     g.add_node("gap_analyse",          _gap_analyse_node)
     g.add_node("verify_grounding",     _verify_grounding_node)
     g.add_node("reconcile",            _reconcile_node)
@@ -605,9 +666,9 @@ def _build_clause_graph() -> Any:  # returns CompiledStateGraph
         },
     )
 
-    g.add_edge("load_org_profile",    "load_state_template")
-    g.add_edge("load_state_template", "state_compare")
-    g.add_edge("state_compare",       "gap_analyse")
+    g.add_edge("load_org_profile",  "load_slot_schema")
+    g.add_edge("load_slot_schema",   "slot_fill")
+    g.add_edge("slot_fill",          "gap_analyse")
     g.add_edge("gap_analyse",         "verify_grounding")
 
     # Bounded repair loop: ungrounded verdicts retry gap_analyse with feedback,
