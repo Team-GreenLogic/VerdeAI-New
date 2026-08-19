@@ -16,14 +16,6 @@ const sanitizeSchema = {
     td: [...(defaultSchema.attributes?.td || []), 'colSpan', 'rowSpan', 'align'],
     th: [...(defaultSchema.attributes?.th || []), 'colSpan', 'rowSpan', 'align'],
   },
-  // The inline citation markers below are rewritten into `citation:<idx>` links
-  // (see preprocessCitations) — rehype-sanitize's default protocol allowlist
-  // for `href` only permits http/https/irc/ircs/mailto/xmpp, so without this
-  // it silently strips the href entirely and the click target is lost.
-  protocols: {
-    ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href || []), 'citation'],
-  },
 }
 
 const components = {
@@ -75,6 +67,7 @@ const components = {
 const CITATION_RE = /\[(?:doc:\s*)?([^,\]]+?)\s*,\s*p\.\s*(\d+)\s*\]/gi
 const ANALYSIS_CITATION_RE = /\[analysis:([^,\]]+),\s*clause\s+([^\]]+)\]/gi
 const SOURCE_CITATION_RE = /\[source:([^\]]+)\]/gi
+const CITATION_HREF_PREFIX = '#verdeai-citation-'
 
 function citationLabel(citation) {
   if (citation?.display_label) return citation.display_label
@@ -84,7 +77,10 @@ function citationLabel(citation) {
 
 function citationMarkdown(citation, idx) {
   const label = citationLabel(citation).replace(/([\\\[\]])/g, '\\$1')
-  return `[${label}](citation:${idx})`
+  // Use a same-page fragment instead of a custom URL protocol. React Markdown
+  // applies its URL transform before the component renderer and can strip an
+  // unknown protocol such as `citation:`, turning it into a navigable empty link.
+  return `[${label}](${CITATION_HREF_PREFIX}${idx})`
 }
 
 // Rewrites each citation marker into a placeholder markdown link keyed by the
@@ -116,12 +112,16 @@ function preprocessCitations(content, citations) {
 }
 
 function CitationLink({ href, citations, onCitationClick }) {
-  const idx = Number(href.slice('citation:'.length))
+  const idx = Number(href.slice(CITATION_HREF_PREFIX.length))
   const citation = citations?.[idx]
   return (
     <button
       type="button"
-      onClick={() => citation && onCitationClick?.(citation)}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (citation) onCitationClick?.(citation)
+      }}
       disabled={!citation}
       title={citation ? (citation.type === 'analysis'
         ? `Analysis ${citation.analysis_id} — clause ${citation.clause_id}`
@@ -142,7 +142,7 @@ export default function MarkdownContent({ content, className, citations, onCitat
   const componentsWithCitations = {
     ...components,
     a: ({ href, children }) => (
-      href?.startsWith('citation:')
+      href?.startsWith(CITATION_HREF_PREFIX)
         ? <CitationLink href={href} citations={citations} onCitationClick={onCitationClick} />
         : <a href={href} className="text-brand-600 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>
     ),
@@ -162,4 +162,3 @@ export default function MarkdownContent({ content, className, citations, onCitat
     </div>
   )
 }
-
