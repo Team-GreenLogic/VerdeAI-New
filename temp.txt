@@ -77,3 +77,36 @@ sudo docker compose exec -T mongodb mongosh --quiet verdeai --eval '
       { type: "filter", path: "created_at" }
     ]
   });'
+
+
+----
+
+● Let me make it dead simple. There are two cases:
+
+  Case 1 — you just want the app to keep working like before
+
+  Do nothing. CPR is off by default (PARTITION_RETRIEVAL_ENABLED=False). My changes don't touch the old behavior. The app runs exactly
+  as it did.
+
+  Case 2 — you want to actually turn ON the new CPR feature
+
+  Then yes, action is needed — 3 steps, in order:
+
+  Step 1 — rebuild gap-analyzer (so the new scikit-learn dependency is installed):
+  docker compose build gap-analyzer && docker compose up -d gap-analyzer
+
+  Step 2 — build the partitions once (reads your existing docs — no re-upload):
+  docker compose exec gap-analyzer python scripts/build_partitions.py
+
+  Step 3 — turn the flag on and restart:
+  - In your .env, add: PARTITION_RETRIEVAL_ENABLED=true
+  - Then: docker compose up -d gap-analyzer
+
+  Now run an analysis → it uses CPR.
+
+  ---
+  So to answer directly: No action is needed for the system to keep working. Action is needed only if you want the new feature active —
+  the 3 steps above.
+
+  👉 Which do you want? If you want it active, tell me and I'll walk you through each step live (and I can check that partitions built
+  correctly before you flip the flag).

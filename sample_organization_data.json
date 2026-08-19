@@ -1,0 +1,176 @@
+{
+  "metadata": {
+    "data_version": "1.0",
+    "generated_date": "2025-01-20",
+    "description": "Sample synthetic data for ISO 14001:2015 compliance gap analysis POC"
+  },
+
+  "organization": {
+    "name": "GreenTech Manufacturing Ltd",
+    "industry": "Electronics Manufacturing",
+    "size": "Medium (250-500 employees)",
+    "location": "Birmingham, UK",
+    "sites": ["Main Factory - Birmingham", "Warehouse - Coventry"],
+    "primary_activities": [
+      "Circuit board assembly",
+      "Electronic component manufacturing", 
+      "Product packaging and distribution"
+    ]
+  },
+
+  "environmental_policy": {
+    "exists": true,
+    "document_name": "GreenTech Environmental Policy v2.3",
+    "last_reviewed": "2024-06-15",
+    "approved_by": "CEO",
+    "communicated_to_employees": true,
+    "publicly_available": true,
+    "commitments": [
+      "Compliance with environmental legislation",
+      "Continual improvement of environmental performance",
+      "Prevention of pollution"
+    ],
+    "missing_elements": []
+  },
+
+  "context_and_scope": {
+    "ems_scope_defined": true,
+    "scope_description": "Design, manufacture and distribution of electronic components at Birmingham facility",
+    "interested_parties_identified": true,
+    "interested_parties": [
+      {"party": "Regulators", "requirements": "Compliance with UK environmental regulations"},
+      {"party": "Customers", "requirements": "Product environmental certifications"},
+      {"party": "Local community", "requirements": "Noise and emissions control"}
+    ],
+    "internal_external_issues_documented": false,
+    "notes": "No formal documentation of internal/external issues affecting EMS"
+  },
+
+  "leadership": {
+    "top_management_commitment_demonstrated": true,
+    "environmental_roles_defined": true,
+    "roles": [
+      {"role": "Environmental Manager", "name": "Sarah Chen", "responsibilities": "Day-to-day EMS management"},
+      {"role": "EMS Management Representative", "name": "James Wilson", "responsibilities": "Reporting to top management"}
+    ],
+    "management_review_conducted": true,
+    "last_management_review": "2024-09-10",
+    "review_frequency": "Annual"
+  },
+
+  "planning": {
+    "environmental_aspects_identified": true,
+    "significant_aspects": [
+      {"aspect": "Energy consumption", "impact": "GHG emissions", "significance": "High"},
+      {"aspect": "Solvent use", "impact": "Air emissions / VOCs", "significance": "High"},
+      {"aspect": "Waste generation", "impact": "Landfill / resource depletion", "significance": "Medium"},
+      {"aspect": "Water discharge", "impact": "Water pollution", "significance": "Low"}
+    ],
+    "legal_requirements_register": true,
+    "legal_register_last_updated": "2024-03-20",
+    "compliance_evaluation_conducted": true,
+    "last_compliance_evaluation": "2024-04-15",
+    "objectives_and_targets": [
+      {"objective": "Reduce energy consumption", "target": "10% reduction by 2025", "progress": "6% achieved"},
+      {"objective": "Reduce waste to landfill", "target": "Zero waste to landfill by 2026", "progress": "Currently at 15% to landfill"}
+    ],
+    "action_plans_for_objectives": true,
+    "risks_and_opportunities_assessed": false,
+    "notes": "No formal risk/opportunity assessment documented"
+  },
+
+  "support": {
+    "resources_allocated": true,
+    "competence": {
+      "training_program_exists": true,
+      "training_records_maintained": true,
+      "environmental_awareness_training": true,
+      "last_awareness_training": "2024-02-20",
+      "role_specific_training": ["Environmental Manager", "Waste handlers", "Chemical handlers"]
+    },
+    "communication": {
+      "internal_communication_process": true,
+      "external_communication_process": false,
+      "notes": "No formal process for external environmental communication"
+    },
+    "documented_information": {
+      "document_control_procedure": true,
+      "records_retention_defined": true,
+      "documents_version_controlled": true
+    }
+  },
+
+  "operations": {
+    "operational_controls": [
+      {"process": "Solvent handling", "control": "Enclosed systems, vapor recovery", "documented": true},
+      {"process": "Waste segregation", "control": "Color-coded bins, training", "documented": true},
+      {"process": "Energy management", "control": "Automated lighting, equipment scheduling", "documented": false}
+    ],
+    "emergency_preparedness": {
+      "emergency_procedures_exist": true,
+      "procedures_cover": ["Chemical spills", "Fire"],
+      "emergency_drills_conducted": true,
+      "last_drill": "2024-07-12",
+      "drill_frequency": "Annual",
+      "gaps": ["No procedure for gas leak scenario"]
+    },
+    "outsourced_processes_controlled": false,
+    "notes": "No documented controls for outsourced transport and logistics"
+  },
+
+  "performance_evaluation": {
+    "monitoring_and_measurement": {
+      "parameters_monitored": [
+        {"parameter": "Energy consumption", "frequency": "Monthly", "method": "Meter readings"},
+        {"parameter": "Waste volumes", "frequency": "Monthly", "method": "Waste transfer notes"},
+        {"parameter": "Water consumption", "frequency": "Monthly", "method": "Meter readings"}
+      ],
+      "equipment_calibrated": true,
+      "emissions_monitored": false,
+      "notes": "VOC emissions not currently monitored"
+    },
+    "internal_audit": {
+      "audit_program_exists": true,
+      "audits_conducted": true,
+      "last_audit_date": "2024-08-05",
+      "audit_frequency": "Annual",
+      "auditor_competence_defined": true,
+      "nonconformities_from_last_audit": 3,
+      "nonconformities_closed": 2
+    },
+    "management_review": {
+      "conducted_regularly": true,
+      "inputs_include": ["Audit results", "Compliance evaluation", "Objectives progress"],
+      "outputs_documented": true,
+      "actions_tracked": true
+    }
+  },
+
+  "improvement": {
+    "nonconformity_procedure": true,
+    "corrective_action_process": true,
+    "open_corrective_actions": 4,
+    "continual_improvement_demonstrated": true,
+    "improvement_examples": [
+      "LED lighting retrofit completed 2024",
+      "Waste segregation improved - recycling rate up 20%"
+    ]
+  },
+
+  "certifications": {
+    "iso_14001_certified": false,
+    "other_certifications": ["ISO 9001:2015"],
+    "certification_body": "BSI",
+    "notes": "Seeking ISO 14001 certification in 2025"
+  },
+
+  "documents_provided": [
+    {"document": "Environmental Policy", "filename": "env_policy_v2.3.pdf", "date": "2024-06-15"},
+    {"document": "Aspects Register", "filename": "aspects_register_2024.xlsx", "date": "2024-01-10"},
+    {"document": "Legal Register", "filename": "legal_register.xlsx", "date": "2024-03-20"},
+    {"document": "Objectives and Targets", "filename": "objectives_2024.pdf", "date": "2024-01-05"},
+    {"document": "Internal Audit Report", "filename": "audit_report_aug2024.pdf", "date": "2024-08-05"},
+    {"document": "Management Review Minutes", "filename": "mgmt_review_sep2024.pdf", "date": "2024-09-10"},
+    {"document": "Training Records", "filename": "training_matrix.xlsx", "date": "2024-11-01"}
+  ]
+}
