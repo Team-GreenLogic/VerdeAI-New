@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     # --- Admin ---
     ADMIN_EMAILS: str = ""  # comma-separated emails that auto-receive the admin role
 
+    # --- CORS ---
+    CORS_ORIGINS: str = "http://localhost:5173"  # comma-separated list of allowed origins
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
     # --- Tuning ---
     EMBED_BATCH_SIZE: int = 128
     EMBED_BATCH_DELAY: float = 0.0  # seconds between batches; set >0 on free-tier Voyage (3 RPM)
