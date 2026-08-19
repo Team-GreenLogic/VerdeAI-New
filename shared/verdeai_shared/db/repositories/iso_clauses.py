@@ -5,6 +5,7 @@ from typing import Any
 from motor.motor_asyncio import AsyncIOMotorDatabase  # type: ignore[import-untyped]
 
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
+from verdeai_shared.iso.clause_order import clause_sort_key
 
 
 class ISOClausesRepository:
@@ -26,7 +27,8 @@ class ISOClausesRepository:
 
     async def list_all(self, version_id: str = DEFAULT_VERSION_ID) -> list[dict[str, Any]]:
         cursor = self._col.find({"version_id": version_id})
-        return await cursor.to_list(length=None)
+        clauses = await cursor.to_list(length=None)
+        return sorted(clauses, key=lambda clause: clause_sort_key(clause.get("clause_id")))
 
     async def delete_for_version(self, version_id: str) -> int:
         result = await self._col.delete_many({"version_id": version_id})

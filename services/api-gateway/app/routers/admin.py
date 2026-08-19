@@ -20,6 +20,7 @@ from verdeai_shared.db.mongo import get_database
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.iso_versions import ISOVersionsRepository
+from verdeai_shared.iso.clause_order import clause_sort_key
 from verdeai_shared.messaging.events import IsoVersionBuildRequested
 from verdeai_shared.retrieval.embedder import embed_documents
 from verdeai_shared.settings import settings as shared_settings
@@ -252,7 +253,7 @@ async def list_clauses(version_id: str, principal: CurrentAdmin) -> list[ClauseD
     db = get_database()
     await _assert_version_exists(db, version_id)
     clauses = await ISOClausesRepository(db).list_all(version_id=version_id)
-    clauses.sort(key=lambda c: (str(c.get("section", "")), c.get("clause_id", "")))
+    clauses.sort(key=lambda clause: clause_sort_key(clause.get("clause_id")))
     return [_clause_to_detail(c) for c in clauses]
 
 

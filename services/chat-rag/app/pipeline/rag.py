@@ -14,6 +14,7 @@ from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
 from verdeai_shared.llm.openrouter_client import stream
+from verdeai_shared.iso.clause_order import clause_sort_key
 from verdeai_shared.retrieval.embedder import embed_query
 from verdeai_shared.retrieval.hybrid import hybrid_retrieve
 from verdeai_shared.settings import settings
@@ -210,10 +211,13 @@ def _select_detailed_results(
     clause_mentions = set(re.findall(r"\b(?:clause\s*)?(\d+(?:\.\d+)+)\b", q))
     mentioned = [r for r in results if str(r.get("clause_id", "")) in clause_mentions]
     if mentioned:
-        return mentioned[:_DETAIL_RESULT_LIMIT]
+        return sorted(
+            mentioned,
+            key=lambda result: clause_sort_key(result.get("clause_id")),
+        )[:_DETAIL_RESULT_LIMIT]
 
     tokens = {t for t in re.findall(r"[a-z0-9]+", q) if len(t) > 3}
-    ranked: list[tuple[int, int, float, str, dict[str, Any]]] = []
+    ranked: list[tuple[int, int, float, tuple[Any, ...], dict[str, Any]]] = []
     for result in results:
         searchable = _result_search_text(result, recs, missing)
         overlap = sum(1 for token in tokens if token in searchable)
@@ -221,7 +225,13 @@ def _select_detailed_results(
         clause_id = str(result.get("clause_id", ""))
         related_recs = [r for r in recs if str(r.get("clause_id", "")) == clause_id]
         impact = max((float(r.get("impact", 0) or 0) for r in related_recs), default=0.0)
-        ranked.append((-overlap, _DECISION_PRIORITY.get(decision, 4), -impact, clause_id, result))
+        ranked.append((
+            -overlap,
+            _DECISION_PRIORITY.get(decision, 4),
+            -impact,
+            clause_sort_key(clause_id),
+            result,
+        ))
     ranked.sort(key=lambda item: item[:4])
     return [item[4] for item in ranked[:_DETAIL_RESULT_LIMIT]]
 
@@ -287,7 +297,7 @@ async def _load_analysis_context(
     detailed = _select_detailed_results(question, results, recs, missing)
 
     rows: list[str] = []
-    for r in sorted(results, key=lambda x: x.get("clause_id", "")):
+    for r in sorted(results, key=lambda x: clause_sort_key(x.get("clause_id"))):
         clause_id = r.get("clause_id", "?")
         decision = r.get("decision", "Unknown")
         confidence = r.get("confidence", 0.0)

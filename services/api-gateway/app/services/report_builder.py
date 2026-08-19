@@ -19,6 +19,7 @@ from markupsafe import Markup
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
 from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
+from verdeai_shared.iso.clause_order import clause_sort_key
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 _jinja = Environment(
@@ -57,17 +58,6 @@ def _citation_html(text: str) -> Markup:
     html = _markdown.markdown(text, extensions=["tables"])
     clean = nh3.clean(html, tags=_CITATION_ALLOWED_TAGS, attributes=_CITATION_ALLOWED_ATTRIBUTES)
     return Markup(clean)
-
-
-def _clause_sort_key(clause_id: str) -> list[int]:
-    """Numeric sort for dotted clause ids (e.g. "6.1.2") — mirrors the UI's compareClauseIds."""
-    parts: list[int] = []
-    for p in str(clause_id).split("."):
-        try:
-            parts.append(int(p))
-        except ValueError:
-            parts.append(0)
-    return parts
 
 
 def _citation_label(c: dict[str, Any]) -> str:
@@ -173,7 +163,7 @@ async def build_report_context(
             "is_gap": decision != "Met",
         })
 
-    clauses.sort(key=lambda c: _clause_sort_key(c["clause_id"]))
+    clauses.sort(key=lambda c: clause_sort_key(c["clause_id"]))
 
     total = len(clauses)
     met = counts["Met"]
@@ -226,4 +216,3 @@ def render_report_pdf(context: dict[str, Any]) -> bytes:
 
     html = _jinja.get_template("compliance_report.html.j2").render(**context)
     return HTML(string=html).write_pdf()
-

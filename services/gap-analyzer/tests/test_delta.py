@@ -37,7 +37,7 @@ def _stub_retrieval(monkeypatch):
     async def _embed(_text):
         return [0.0]
 
-    async def _retrieve(_db, _tenant, _q, _vec, created_after=None):
+    async def _retrieve(_db, _tenant, _profile, _q, _vec, created_after=None):
         return []
 
     monkeypatch.setattr(actors, "embed_query", _embed)
@@ -53,7 +53,7 @@ async def test_category_b_removed_evidence(monkeypatch):
         {"clause_id": "4.1", "decision": "Met", "source_document_ids": ["docX", "docY"]},
         {"clause_id": "4.2", "decision": "Met", "source_document_ids": ["docZ"]},
     ]
-    affected = await actors._compute_affected_clauses(db, "t", BASELINE, clauses, parent_results)
+    affected = await actors._compute_affected_clauses(db, "t", "p", BASELINE, clauses, parent_results)
     assert affected == {"4.1"}
 
 
@@ -67,7 +67,7 @@ async def test_category_a_new_evidence(monkeypatch):
         {"clause_id": "4.2", "decision": "Not Met", "source_document_ids": []},
     ]
 
-    async def _retrieve(_db, _tenant, q, _vec, created_after=None):
+    async def _retrieve(_db, _tenant, _profile, q, _vec, created_after=None):
         assert created_after == BASELINE  # new-evidence-only retrieval
         if q == "q4.1":
             # MIN_RELEVANT_CHUNKS relevant hits above the rerank floor
@@ -76,7 +76,7 @@ async def test_category_a_new_evidence(monkeypatch):
 
     monkeypatch.setattr(actors, "hybrid_retrieve", _retrieve)
 
-    affected = await actors._compute_affected_clauses(db, "t", BASELINE, clauses, parent_results)
+    affected = await actors._compute_affected_clauses(db, "t", "p", BASELINE, clauses, parent_results)
     assert affected == {"4.1"}
 
 
@@ -86,7 +86,7 @@ async def test_clause_missing_parent_verdict_is_affected():
     db = _FakeDB()
     clauses = [_clause("4.1"), _clause("9.9")]
     parent_results = [{"clause_id": "4.1", "decision": "Met", "source_document_ids": []}]
-    affected = await actors._compute_affected_clauses(db, "t", BASELINE, clauses, parent_results)
+    affected = await actors._compute_affected_clauses(db, "t", "p", BASELINE, clauses, parent_results)
     assert affected == {"9.9"}
 
 
@@ -99,5 +99,5 @@ async def test_no_changes_means_nothing_affected():
         {"clause_id": "4.1", "decision": "Met", "source_document_ids": ["d1"]},
         {"clause_id": "4.2", "decision": "Met", "source_document_ids": ["d2"]},
     ]
-    affected = await actors._compute_affected_clauses(db, "t", BASELINE, clauses, parent_results)
+    affected = await actors._compute_affected_clauses(db, "t", "p", BASELINE, clauses, parent_results)
     assert affected == set()

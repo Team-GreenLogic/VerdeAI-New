@@ -98,6 +98,18 @@ def test_broad_question_prioritizes_stored_gap_severity_and_impact():
     assert [item["clause_id"] for item in selected][:2] == ["6.1.2", "7.2"]
 
 
+def test_equally_ranked_chat_context_uses_numeric_clause_order():
+    results = [
+        {"clause_id": "10.1", "decision": "Not Met", "reasoning": "gap"},
+        {"clause_id": "4.2", "decision": "Not Met", "reasoning": "gap"},
+        {"clause_id": "4.1", "decision": "Not Met", "reasoning": "gap"},
+    ]
+
+    selected = _select_detailed_results("Summarise the gaps", results, [], [])
+
+    assert [item["clause_id"] for item in selected] == ["4.1", "4.2", "10.1"]
+
+
 def test_retrieved_documents_receive_stable_source_keys_and_labels():
     prompt, citations = _format_chunks_for_prompt([
         {"filename": "aspects-register.pdf", "page": 4, "text": "Register excerpt"},
@@ -129,4 +141,3 @@ def test_analysis_and_its_evidence_receive_distinct_source_keys():
         "analysis-6.1.2-document-1",
     ]
     assert citations[0]["display_label"] == "Clause 6.1.2 · Not Met"
-

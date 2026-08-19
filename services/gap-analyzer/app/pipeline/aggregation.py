@@ -25,6 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from verdeai_shared.iso.clause_order import clause_sort_key
 from verdeai_shared.iso.slots import build_slot_credit_rows, pool_coverage
 
 # Worst-child-wins order: the first entry present among a parent's children is the parent's
@@ -89,7 +90,10 @@ def aggregate_parent_decisions(
 
     changed: dict[str, str] = {}
     # Deepest first so an aggregated child feeds into its own parent.
-    for parent in sorted(children_by_parent, key=_depth, reverse=True):
+    for parent in sorted(
+        children_by_parent,
+        key=lambda cid: (-_depth(cid), clause_sort_key(cid)),
+    ):
         child_decisions = {
             changed.get(c, decisions[c]) for c in children_by_parent[parent]
         }
@@ -148,7 +152,7 @@ def aggregate_children_slots(
     """
     children = sorted(
         (r for r in results if r.get("clause_id") and parent_of(r["clause_id"]) == clause_id),
-        key=lambda r: r["clause_id"],
+        key=lambda r: clause_sort_key(r["clause_id"]),
     )
     if not children:
         return None

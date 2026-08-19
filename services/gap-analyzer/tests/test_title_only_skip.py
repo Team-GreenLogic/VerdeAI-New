@@ -199,3 +199,63 @@ async def test_title_only_clause_never_reaches_analyse_clause(monkeypatch: pytes
     summary = results["6.2"].get("children_summary")
     assert summary is not None
     assert [c["clause_id"] for c in summary["children"]] == ["6.2.1", "6.2.2"]
+
+
+@pytest.mark.asyncio
+async def test_clauses_are_analysed_in_numeric_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    clauses = [
+        {"clause_id": clause_id, "version_id": VERSION_ID, "title": clause_id,
+         "requirements": f"Requirement {clause_id}"}
+        for clause_id in ("10.1", "6.1.10", "4.2", "6.1.2", "4.1")
+    ]
+    db = _FakeDB(
+        clauses=clauses,
+        analysis_doc={"analysis_id": ANALYSIS_ID, "tenant_id": TENANT, "status": "pending"},
+    )
+    monkeypatch.setattr(actors, "get_database", lambda: db)
+
+    seen_clause_ids: list[str] = []
+
+    async def _fake_analyse_clause(
+        db_: Any,
+        tenant_id: str,
+        _profile_id: str,
+        analysis_id: str,
+        clause: dict[str, Any],
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
+        clause_id = clause["clause_id"]
+        seen_clause_ids.append(clause_id)
+        result = {
+            "decision": "Met",
+            "confidence": 1.0,
+            "reasoning": "ok",
+            "citations": [],
+            "missing_evidence": [],
+            "slot_fills": [],
+            "slot_schema": [],
+        }
+        await db_["result_store"].update_one(
+            {"tenant_id": tenant_id, "analysis_id": analysis_id, "clause_id": clause_id},
+            {"$set": {
+                **result,
+                "tenant_id": tenant_id,
+                "analysis_id": analysis_id,
+                "clause_id": clause_id,
+            }},
+            upsert=True,
+        )
+        return result
+
+    monkeypatch.setattr(actors, "analyse_clause", _fake_analyse_clause)
+
+    event = AnalysisRequested(
+        tenant_id=TENANT,
+        profile_id="profile-1",
+        analysis_id=ANALYSIS_ID,
+        scope="full",
+        version_id=VERSION_ID,
+    )
+    await actors.handle_analysis_requested(_FakeMessage(event))  # type: ignore[arg-type]
+
+    assert seen_clause_ids == ["4.1", "4.2", "6.1.2", "6.1.10", "10.1"]

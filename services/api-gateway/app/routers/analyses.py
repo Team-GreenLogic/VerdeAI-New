@@ -12,6 +12,7 @@ from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
 from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
+from verdeai_shared.iso.clause_order import clause_sort_key
 from verdeai_shared.messaging.events import AnalysisRequested
 
 from app.services.analysis_publisher import publish_analysis_requested
@@ -470,9 +471,9 @@ async def get_analysis_results(
 
     cursor = db.result_store.find(
         {"analysis_id": analysis_id, "tenant_id": tenant_id},
-        sort=[("clause_id", 1)],
     )
     rows = await cursor.to_list(length=None)
+    rows.sort(key=lambda row: clause_sort_key(row.get("clause_id")))
 
     return [
         GapResult(
@@ -546,19 +547,24 @@ async def get_recommendations(
         "impact": "impact",
     }
 
-    sort_rules: list[tuple[str, int]] = []
-    if sort_by and sort_by in sort_field_map:
-        field = sort_field_map[sort_by]
-        direction = -1 if order.lower() == "desc" else 1
-        sort_rules = [(field, direction), ("clause_id", 1)]
-    else:
-        sort_rules = [("clause_id", 1)]
-
     cursor = db.recommendation_store.find(
         {"analysis_id": analysis_id, "tenant_id": tenant_id},
-        sort=sort_rules,
     )
     rows = await cursor.to_list(length=None)
+    descending = order.lower() == "desc"
+    if sort_by and sort_by in sort_field_map:
+        field = sort_field_map[sort_by]
+        if field == "clause_id":
+            rows.sort(
+                key=lambda row: clause_sort_key(row.get("clause_id")),
+                reverse=descending,
+            )
+        else:
+            # Python's stable sort preserves numeric clause order for equal values.
+            rows.sort(key=lambda row: clause_sort_key(row.get("clause_id")))
+            rows.sort(key=lambda row: float(row.get(field) or 0), reverse=descending)
+    else:
+        rows.sort(key=lambda row: clause_sort_key(row.get("clause_id")))
 
     return [
         RecommendationItem(
@@ -585,9 +591,9 @@ async def get_missing_requirements(
 
     cursor = db.missing_request_store.find(
         {"analysis_id": analysis_id, "tenant_id": tenant_id},
-        sort=[("clause_id", 1)],
     )
     rows = await cursor.to_list(length=None)
+    rows.sort(key=lambda row: clause_sort_key(row.get("clause_id")))
 
     return [
         MissingRequirementItem(
@@ -597,4 +603,3 @@ async def get_missing_requirements(
         )
         for r in rows
     ]
-

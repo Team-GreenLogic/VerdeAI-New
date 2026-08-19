@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from verdeai_shared.db.repositories.base import BaseRepository
+from verdeai_shared.iso.clause_order import clause_sort_key
 
 
 class ResultStoreRepository(BaseRepository):
@@ -27,4 +28,5 @@ class ResultStoreRepository(BaseRepository):
 
     async def list_for_analysis(self, analysis_id: str) -> list[dict[str, Any]]:
         cursor = self._col.find(self._filter({"analysis_id": analysis_id}))
-        return await cursor.to_list(length=None)
+        results = await cursor.to_list(length=None)
+        return sorted(results, key=lambda result: clause_sort_key(result.get("clause_id")))

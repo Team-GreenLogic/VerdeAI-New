@@ -13,6 +13,7 @@ from verdeai_shared.db.repositories.iso_state import ISOStateRepository
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 from verdeai_shared.db.repositories.org_profile import OrgProfileRepository
 from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
+from verdeai_shared.iso.clause_order import clause_sort_key
 
 router = APIRouter(prefix="/org-profiles", tags=["org-profiles"])
 
@@ -192,7 +193,7 @@ async def get_completeness(
     total_all = 0
     filled_all = 0
 
-    for cid in sorted(clause_map):
+    for cid in sorted(clause_map, key=clause_sort_key):
         fields = clause_fields.get(cid, [])
         total = len(fields)
         filled = sum(1 for fp in fields if fp in filled_paths)

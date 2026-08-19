@@ -12,6 +12,7 @@ from verdeai_shared.db.mongo import get_database
 from verdeai_shared.settings import settings
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.result_store import ResultStoreRepository
+from verdeai_shared.iso.clause_order import clause_sort_key
 from verdeai_shared.messaging.connection import get_channel
 from verdeai_shared.messaging.events import AnalysisGapsReady, AnalysisRequested
 
@@ -82,6 +83,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
     else:
         clause_map = {c["clause_id"]: c for c in all_clauses}
         clauses = [clause_map[cid] for cid in scope if cid in clause_map]
+    clauses.sort(key=lambda clause: clause_sort_key(clause.get("clause_id")))
 
     if not clauses:
         logger.warning("No clauses to analyse", analysis_id=analysis_id)
@@ -582,4 +584,3 @@ async def _publish_gaps_ready(event: AnalysisGapsReady) -> None:
         await channel.close()
     except Exception as exc:
         logger.warning("Failed to publish AnalysisGapsReady", error=str(exc))
-
