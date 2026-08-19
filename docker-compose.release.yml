@@ -16,6 +16,8 @@ services:
 
   demo-ui:
     restart: unless-stopped
+    ports:
+      - "80:5173"
     environment:
       VITE_API_URL: http://${PUBLIC_HOST}:8000
       VITE_CHAT_URL: http://${PUBLIC_HOST}:8001
