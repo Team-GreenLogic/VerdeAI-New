@@ -1,10 +1,60 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  getProfile, updateProfile,
+  getProfile, updateProfile, deleteProfile,
   getCompleteness, listClauses, getClause, updateClause,
 } from '../api/orgProfiles.js'
+import ModalPortal from '../components/ModalPortal.jsx'
 import Spinner from '../components/Spinner.jsx'
+
+function DeleteProfileModal({ deleting, error, onClose, onConfirm }) {
+  return (
+    <ModalPortal
+      onClose={deleting ? undefined : onClose}
+      labelledBy="delete-profile-title"
+      panelClassName="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+    >
+      <div className="p-6">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300">
+          <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h2 id="delete-profile-title" className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Delete organisation profile?
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+          The profile will disappear from profile pickers and cannot be used for new uploads, analyses, or chats. Existing documents, analyses, and conversations will be retained.
+        </p>
+        {error && (
+          <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            data-autofocus
+            disabled={deleting}
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={onConfirm}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-wait disabled:opacity-60 dark:bg-red-700 dark:hover:bg-red-600"
+          >
+            {deleting && <Spinner size="sm" />}
+            {deleting ? 'Deleting…' : 'Delete profile'}
+          </button>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+}
 
 function ProgressBar({ pct }) {
   const color = pct >= 80 ? 'bg-brand-500' : pct >= 40 ? 'bg-amber-400' : 'bg-red-400'
@@ -227,6 +277,9 @@ export default function OrgProfileDetailPage() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('info')
   const [completeness, setCompleteness] = useState(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     getCompleteness(profileId).then(c => setCompleteness(c)).catch(() => {})
@@ -234,8 +287,37 @@ export default function OrgProfileDetailPage() {
 
   const pct = completeness?.overall_pct ?? 0
 
+  async function handleDelete() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await deleteProfile(profileId)
+      if (localStorage.getItem('verdeai_last_chat_profile_id') === profileId) {
+        localStorage.removeItem('verdeai_last_chat_profile_id')
+      }
+      if (sessionStorage.getItem('chat_profile_id') === profileId) {
+        sessionStorage.removeItem('chat_profile_id')
+        sessionStorage.removeItem('chat_session_id')
+        sessionStorage.removeItem('chat_messages')
+      }
+      navigate('/org-profiles', { replace: true })
+    } catch (err) {
+      setDeleteError(err.message || 'Unable to delete this profile.')
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-5">
+      {deleteOpen && (
+        <DeleteProfileModal
+          deleting={deleting}
+          error={deleteError}
+          onClose={() => { setDeleteOpen(false); setDeleteError('') }}
+          onConfirm={handleDelete}
+        />
+      )}
+
       <button onClick={() => navigate('/org-profiles')} className="text-xs text-slate-400 hover:text-brand-600 transition-colors">
         ← Org Profiles
       </button>
@@ -271,9 +353,21 @@ export default function OrgProfileDetailPage() {
         </div>
       )}
 
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Organisation Profile</h1>
-        <p className="text-sm text-slate-500 mt-1">Your profile data is used to personalise gap analysis and recommendations.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Organisation Profile</h1>
+          <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">Your profile data is used to personalise gap analysis and recommendations.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDeleteOpen(true)}
+          className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 dark:border-red-900/80 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/40"
+        >
+          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Delete profile
+        </button>
       </div>
 
       {/* Pill tabs */}
@@ -300,4 +394,3 @@ export default function OrgProfileDetailPage() {
     </div>
   )
 }
-

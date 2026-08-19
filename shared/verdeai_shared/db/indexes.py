@@ -27,7 +27,7 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type
 
     # org_profiles — registry of org profiles, one doc per profile
     await db.org_profiles.create_indexes([
-        IndexModel([("tenant_id", ASCENDING)]),
+        IndexModel([("tenant_id", ASCENDING), ("is_deleted", ASCENDING)]),
     ])
 
     # documents — now unique per (tenant_id, profile_id, ...)
@@ -216,6 +216,8 @@ async def _backfill_org_profiles(db: AsyncIOMotorDatabase) -> None:  # type: ign
 
         profile_doc = {
             "tenant_id": tenant_id,
+            "is_deleted": False,
+            "deleted_at": None,
             "org_name": old_by_path.get(_SUMMARY_FIELD_PATHS["org_name"]),
             "org_industry": old_by_path.get(_SUMMARY_FIELD_PATHS["org_industry"]),
             "org_size": old_by_path.get(_SUMMARY_FIELD_PATHS["org_size"]),

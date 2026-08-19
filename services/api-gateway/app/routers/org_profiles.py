@@ -149,24 +149,14 @@ async def delete_org_profile(
     profile_id: str,
     principal: CurrentPrincipal,
 ) -> dict[str, str]:
-    """Delete an org profile. Blocked (409) while it still has documents or analyses."""
+    """Soft-delete a profile while preserving all of its associated tenant data."""
     db = get_database()
     tenant_id = principal.tenant_id
     await _get_owned_profile(db, tenant_id, profile_id)
 
-    doc_count = await db.documents.count_documents({
-        "tenant_id": tenant_id, "profile_id": profile_id, "status": {"$ne": "deleted"}
-    })
-    analysis_count = await db.analyses.count_documents({"tenant_id": tenant_id, "profile_id": profile_id})
-    if doc_count or analysis_count:
-        raise HTTPException(
-            status_code=409,
-            detail="This org profile has documents or analyses — remove them first.",
-        )
-
-    await db.chat_history.delete_many({"tenant_id": tenant_id, "profile_id": profile_id})
-    await db.chat_memory_summary.delete_many({"tenant_id": tenant_id, "profile_id": profile_id})
-    await OrgProfilesRepository(db, tenant_id).delete(profile_id)
+    deleted = await OrgProfilesRepository(db, tenant_id).soft_delete(profile_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Org profile not found")
 
     return {"profile_id": profile_id, "status": "deleted"}
 
@@ -307,4 +297,3 @@ async def update_clause_profile(
 
     # Return updated clause profile
     return await get_clause_profile(profile_id, clause_id, principal, version_id=version_id)
-

@@ -18,6 +18,8 @@ class OrgProfilesRepository(BaseRepository):
         now = datetime.now(timezone.utc)
         doc: dict[str, Any] = {
             "tenant_id": self._tenant_id,
+            "is_deleted": False,
+            "deleted_at": None,
             "created_at": now,
             "updated_at": now,
             **{key: fields.get(key) for key in _SUMMARY_FIELDS},
@@ -31,10 +33,16 @@ class OrgProfilesRepository(BaseRepository):
             oid = ObjectId(profile_id)
         except (InvalidId, TypeError):
             return None
-        return await self._col.find_one(self._filter({"_id": oid}))
+        return await self._col.find_one(self._filter({
+            "_id": oid,
+            "is_deleted": {"$ne": True},
+        }))
 
     async def list_all(self) -> list[dict[str, Any]]:
-        cursor = self._col.find(self._filter(), sort=[("created_at", 1)])
+        cursor = self._col.find(
+            self._filter({"is_deleted": {"$ne": True}}),
+            sort=[("created_at", 1)],
+        )
         return await cursor.to_list(length=None)
 
     async def update(self, profile_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
@@ -44,13 +52,25 @@ class OrgProfilesRepository(BaseRepository):
             oid = ObjectId(profile_id)
         except (InvalidId, TypeError):
             return None
-        await self._col.update_one(self._filter({"_id": oid}), {"$set": updates})
+        await self._col.update_one(
+            self._filter({"_id": oid, "is_deleted": {"$ne": True}}),
+            {"$set": updates},
+        )
         return await self.get(profile_id)
 
-    async def delete(self, profile_id: str) -> None:
+    async def soft_delete(self, profile_id: str) -> bool:
+        """Flag a profile as deleted while preserving it and all related data."""
         try:
             oid = ObjectId(profile_id)
         except (InvalidId, TypeError):
-            return
-        await self._col.delete_one(self._filter({"_id": oid}))
-
+            return False
+        now = datetime.now(timezone.utc)
+        result = await self._col.update_one(
+            self._filter({"_id": oid, "is_deleted": {"$ne": True}}),
+            {"$set": {
+                "is_deleted": True,
+                "deleted_at": now,
+                "updated_at": now,
+            }},
+        )
+        return result.matched_count > 0
