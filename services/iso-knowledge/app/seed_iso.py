@@ -598,7 +598,10 @@ async def seed_org_profile(
 async def ensure_demo_org_profile(db: Any, tenant_id: str) -> str:
     """Return the demo tenant's org profile id, creating a 'Demo Organisation'
     profile if the tenant has none yet."""
-    existing = await db.org_profiles.find_one({"tenant_id": tenant_id})
+    existing = await db.org_profiles.find_one({
+        "tenant_id": tenant_id,
+        "is_deleted": {"$ne": True},
+    })
     if existing:
         return str(existing["_id"])
 

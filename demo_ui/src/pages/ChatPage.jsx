@@ -337,10 +337,20 @@ export default function ChatPage() {
   // used one (if it still exists) so returning users skip the picker.
   useEffect(() => {
     listProfiles().then(list => {
-      setProfiles(list || [])
+      const activeProfiles = list || []
+      setProfiles(activeProfiles)
+      if (profileId && !activeProfiles.some(p => p.profile_id === profileId)) {
+        sessionStorage.removeItem('chat_profile_id')
+        sessionStorage.removeItem('chat_session_id')
+        sessionStorage.removeItem('chat_messages')
+        setProfileId(null)
+        setSessionId(null)
+        setMessages([])
+        return
+      }
       if (!profileId) {
         const lastId = localStorage.getItem(LAST_PROFILE_KEY)
-        const match = (list || []).find(p => p.profile_id === lastId)
+        const match = activeProfiles.find(p => p.profile_id === lastId)
         if (match) {
           sessionStorage.setItem('chat_profile_id', match.profile_id)
           setProfileId(match.profile_id)
@@ -353,14 +363,14 @@ export default function ChatPage() {
   // Once a profile is selected, ensure a chat session exists for it and load
   // the profile's past conversations.
   useEffect(() => {
-    if (!profileId) return
+    if (profilesLoading || !profileId) return
     if (!sessionId) {
       initSession()
     }
     refreshSessions()
     refreshChatContext()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId])
+  }, [profileId, profilesLoading])
 
   // Only auto-follow the stream if the user hasn't scrolled away from the
   // bottom — otherwise every streamed token would yank their view back down.
