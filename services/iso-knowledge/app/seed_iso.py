@@ -675,11 +675,16 @@ async def seed_benchmark_version(db: Any) -> None:
         for clause, emb in zip(clauses, embeddings):
             await repo.upsert({**clause, "version_id": BENCHMARK_VERSION_ID, "embedding": emb})
 
-        await seed_state_template(db, BENCHMARK_VERSION_ID, clauses=clauses)
         logger.info("Benchmark version seeded", version_id=BENCHMARK_VERSION_ID, clauses=len(clauses))
     else:
         logger.info("Benchmark clauses already seeded — skipping embed", count=existing)
 
+    # The benchmark is a deterministic checked-in fixture. Replace its template slice
+    # before rebuilding it so fields left by older releases cannot coexist with the
+    # canonical three state fields per clause. This does not touch analysis results or
+    # any other ISO version.
+    await ISOStateRepository(db).delete_for_version(BENCHMARK_VERSION_ID)
+    await seed_state_template(db, BENCHMARK_VERSION_ID, clauses=clauses)
     await _apply_benchmark_slot_schemas(db)
 
 
@@ -744,4 +749,3 @@ async def run_seed(demo_tenant_id: str) -> None:
     await seed_org_profile(db, demo_tenant_id, demo_profile_id, DEFAULT_VERSION_ID)
     await ensure_iso_vector_index(db)
     logger.info("ISO knowledge seeding complete")
-
