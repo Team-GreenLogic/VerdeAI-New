@@ -1,0 +1,21 @@
+version: "3.9"
+
+# Production overrides for the release deployment on EC2.
+# Used as: docker compose -f docker-compose.yml -f docker-compose.release.yml up -d --build
+# (deliberately does NOT include docker-compose.override.yml, which is dev-only)
+services:
+  api-gateway:
+    restart: unless-stopped
+
+  chat-rag:
+    restart: unless-stopped
+
+  keycloak:
+    environment:
+      KC_HOSTNAME: ${PUBLIC_HOST}
+
+  demo-ui:
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://${PUBLIC_HOST}:8000
+      VITE_CHAT_URL: http://${PUBLIC_HOST}:8001
