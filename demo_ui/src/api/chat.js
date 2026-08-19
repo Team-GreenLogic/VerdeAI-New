@@ -6,6 +6,10 @@ export async function createSession(profileId) {
   return apiPost('/chat/session', { profile_id: profileId }, { chat: true })
 }
 
+export async function getChatContext(profileId) {
+  return apiGet(`/chat/context?profile_id=${encodeURIComponent(profileId)}`, { chat: true })
+}
+
 /** List this tenant's past chat sessions for a profile, most recently active first. */
 export async function listSessions(profileId) {
   const qs = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : ''

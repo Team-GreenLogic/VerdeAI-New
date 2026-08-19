@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
@@ -17,7 +18,7 @@ from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
 
 from app.config import settings
 from app.pipeline.history import append_turn, load_history
-from app.pipeline.rag import rag_stream
+from app.pipeline.rag import load_chat_context, rag_stream
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -51,6 +52,20 @@ class ChatMessageOut(BaseModel):
     created_at: str
 
 
+class ChatContextResponse(BaseModel):
+    has_completed_analysis: bool
+    analysis_id: str | None = None
+    created_at: str | None = None
+    version_id: str | None = None
+    scope: Any = None
+    gap_count: int | None = None
+    mode: str | None = None
+    stale: bool = False
+    new_chunk_count: int = 0
+    removed_chunk_count: int = 0
+    newer_analysis_status: str | None = None
+
+
 async def _get_owned_profile(db, tenant_id: str, profile_id: str) -> dict:
     profile = await OrgProfilesRepository(db, tenant_id).get(profile_id)
     if profile is None:
@@ -64,6 +79,15 @@ async def create_session(body: ChatSessionCreate, principal: CurrentPrincipal) -
     db = get_database()
     await _get_owned_profile(db, principal.tenant_id, body.profile_id)
     return ChatSessionResponse(session_id=str(uuid.uuid4()))
+
+
+@router.get("/context", response_model=ChatContextResponse)
+async def get_context(profile_id: str, principal: CurrentPrincipal) -> ChatContextResponse:
+    """Describe the latest completed analysis currently authoritative for chat."""
+    db = get_database()
+    await _get_owned_profile(db, principal.tenant_id, profile_id)
+    context = await load_chat_context(db, principal.tenant_id, profile_id)
+    return ChatContextResponse(**context)
 
 
 @router.get("/sessions", response_model=list[ChatSessionSummary])

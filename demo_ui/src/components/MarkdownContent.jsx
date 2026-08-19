@@ -61,6 +61,7 @@ const components = {
 // "[Background Gap Analysis Reference]" marker used for non-document context —
 // that one has no backing chunk to link to, so it's left as plain text.
 const CITATION_RE = /\[(?:doc:\s*)?([^,\]]+?)\s*,\s*p\.\s*(\d+)\s*\]/gi
+const ANALYSIS_CITATION_RE = /\[analysis:([^,\]]+),\s*clause\s+([^\]]+)\]/gi
 
 // Rewrites each citation marker into a placeholder markdown link keyed by the
 // citation's index in `citations` (rather than embedding the raw filename in
@@ -69,7 +70,15 @@ const CITATION_RE = /\[(?:doc:\s*)?([^,\]]+?)\s*,\s*p\.\s*(\d+)\s*\]/gi
 // green badges instead of real links.
 function preprocessCitations(content, citations) {
   if (!citations?.length) return content
-  return content.replace(CITATION_RE, (match, filename, page) => {
+  const withAnalysis = content.replace(ANALYSIS_CITATION_RE, (match, analysisId, clauseId) => {
+    const idx = citations.findIndex(c =>
+      c.type === 'analysis' &&
+      String(c.analysis_id) === analysisId.trim() &&
+      String(c.clause_id) === clauseId.trim()
+    )
+    return `[cite](citation:${idx})`
+  })
+  return withAnalysis.replace(CITATION_RE, (match, filename, page) => {
     const idx = citations.findIndex(c =>
       c.filename?.trim().toLowerCase() === filename.trim().toLowerCase() &&
       String(c.page) === String(page)
@@ -86,14 +95,16 @@ function CitationLink({ href, citations, onCitationClick }) {
       type="button"
       onClick={() => citation && onCitationClick?.(citation)}
       disabled={!citation}
-      title={citation ? `${citation.filename} — p.${citation.page}` : 'Citation unavailable'}
+      title={citation ? (citation.type === 'analysis'
+        ? `Analysis ${citation.analysis_id} — clause ${citation.clause_id}`
+        : `${citation.filename} — p.${citation.page}`) : 'Citation unavailable'}
       className={`inline-flex items-center gap-0.5 mx-0.5 -translate-y-px px-1.5 py-0.5 rounded text-[11px] font-semibold align-middle transition-colors ${
         citation
           ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 cursor-pointer'
           : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-default'
       }`}
     >
-      {citation ? `p.${citation.page}` : '?'}
+      {citation ? (citation.type === 'analysis' ? `clause ${citation.clause_id}` : `p.${citation.page}`) : '?'}
     </button>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createSession, deleteSession, getSessionMessages, listSessions, streamChat } from '../api/chat.js'
+import { createSession, deleteSession, getChatContext, getSessionMessages, listSessions, streamChat } from '../api/chat.js'
 import { listProfiles } from '../api/orgProfiles.js'
 import Spinner from '../components/Spinner.jsx'
 import MarkdownContent from '../components/MarkdownContent.jsx'
@@ -45,6 +45,7 @@ const TrashSVG = () => (
 
 function CitationPanel({ citation, onClose }) {
   if (!citation) return null
+  const isAnalysis = citation.type === 'analysis'
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -57,7 +58,7 @@ function CitationPanel({ citation, onClose }) {
         <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
           <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
             <DocSVG />
-            Document Reference
+            {isAnalysis ? 'Gap Analysis Reference' : 'Document Reference'}
           </h3>
           <button
             onClick={onClose}
@@ -68,8 +69,14 @@ function CitationPanel({ citation, onClose }) {
         </div>
         <div className="p-5 overflow-y-auto scrollbar-thin">
           <div className="mb-4">
-            <p className="font-semibold text-brand-700 text-sm">{citation.filename}</p>
-            <p className="text-xs text-slate-500 mt-1">Page {citation.page}</p>
+            <p className="font-semibold text-brand-700 text-sm">
+              {isAnalysis ? `Clause ${citation.clause_id}` : citation.filename}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {isAnalysis
+                ? `${citation.decision} · ${citation.version_id || 'ISO 14001'} · ${citation.analysis_id}`
+                : `Page ${citation.page}${citation.clause_id ? ` · Clause ${citation.clause_id}` : ''}`}
+            </p>
           </div>
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
             <MarkdownContent content={citation.text || 'No excerpt available.'} />
@@ -194,7 +201,9 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
                     className="w-full text-left text-xs text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-100 rounded-lg px-3 py-1.5 transition-colors flex items-center gap-1.5"
                   >
                     <DocSVG />
-                    {c.filename} — p.{c.page}
+                    {c.type === 'analysis'
+                      ? `Analysis · Clause ${c.clause_id} — ${c.decision}`
+                      : `${c.filename} — p.${c.page}`}
                   </button>
                 ))}
               </div>
@@ -235,6 +244,7 @@ export default function ChatPage() {
   const [activeCitation, setActiveCitation] = useState(null)
   const [sessions, setSessions] = useState([])
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [chatContext, setChatContext] = useState(null)
   const abortRef = useRef(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -284,6 +294,7 @@ export default function ChatPage() {
       initSession()
     }
     refreshSessions()
+    refreshChatContext()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId])
 
@@ -338,6 +349,14 @@ export default function ChatPage() {
       setSessions(await listSessions(profileId))
     } catch (_) {
       // Non-fatal — history panel just stays empty
+    }
+  }
+
+  async function refreshChatContext() {
+    try {
+      setChatContext(await getChatContext(profileId))
+    } catch (_) {
+      setChatContext(null)
     }
   }
 
@@ -420,6 +439,7 @@ export default function ChatPage() {
         setStreaming(false)
         inputRef.current?.focus()
         refreshSessions()
+        refreshChatContext()
       },
       (errMsg) => {
         setError(errMsg)
@@ -523,6 +543,41 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {chatContext && (
+        <div className={`mt-3 rounded-xl border px-4 py-3 text-xs ${
+          !chatContext.has_completed_analysis
+            ? 'border-amber-200 bg-amber-50 text-amber-800'
+            : chatContext.stale
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        }`}>
+          {chatContext.has_completed_analysis ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Using latest completed analysis · {chatContext.version_id} · {chatContext.gap_count} gap{chatContext.gap_count === 1 ? '' : 's'} ·{' '}
+                {chatContext.created_at ? new Date(chatContext.created_at).toLocaleString() : 'date unavailable'}
+              </span>
+              <Link to={`/analyses/${profileId}/${chatContext.analysis_id}`} className="font-semibold underline underline-offset-2">
+                View analysis
+              </Link>
+              {chatContext.stale && (
+                <span className="basis-full">
+                  Evidence changed after this analysis ({chatContext.new_chunk_count} new, {chatContext.removed_chunk_count} removed). Run delta re-analysis for current verdicts.
+                </span>
+              )}
+              {chatContext.newer_analysis_status && (
+                <span className="basis-full">A newer analysis is {chatContext.newer_analysis_status}; chat will switch when it completes.</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <span>No completed gap analysis exists. Chat can provide general ISO guidance but will not diagnose this organisation.</span>
+              <Link to="/analyses" className="font-semibold underline underline-offset-2 whitespace-nowrap">Run analysis</Link>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div
         ref={messagesContainerRef}
@@ -536,7 +591,7 @@ export default function ChatPage() {
             </div>
             <div>
               <p className="text-slate-700 font-semibold">Ask anything about your compliance</p>
-              <p className="text-sm text-slate-400 mt-1">Answers are grounded in your uploaded documents</p>
+              <p className="text-sm text-slate-400 mt-1">Answers use your latest completed gap analysis and its supporting evidence</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
               {SUGGESTIONS.map((s, i) => (
@@ -604,7 +659,7 @@ export default function ChatPage() {
           </button>
         </div>
         <p className="text-xs text-slate-400 mt-3 text-center mb-2">
-          Responses are grounded in your uploaded documents. Always verify important decisions.
+          Responses use your latest completed gap analysis. Always verify important decisions.
         </p>
       </div>
       </div>
