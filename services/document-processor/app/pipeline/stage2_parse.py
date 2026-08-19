@@ -106,7 +106,7 @@ async def _llamaparse(path: Path, filename: str) -> dict[str, Any]:
     """Upload file to LlamaParse and return structured result."""
     from llama_cloud import AsyncLlamaCloud  # type: ignore[import-untyped]
 
-    client = AsyncLlamaCloud(api_key=settings.LLAMA_CLOUD_API_KEY)
+    client = AsyncLlamaCloud(api_key=settings.LLAMA_CLOUD_API_KEY, base_url='https://api.cloud.llamaindex.ai')
 
     # Upload file — pass path string; SDK opens and streams the file
     file_obj = await client.files.create(
@@ -143,3 +143,4 @@ async def _llamaparse(path: Path, filename: str) -> dict[str, Any]:
         "images": images,
         "file_id": file_obj.id,   # kept so Stage 4 can re-fetch images if URLs expired
     }
+

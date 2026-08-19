@@ -4,6 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from verdeai_shared.auth.principal import Principal
+
 
 @pytest.fixture
 def client() -> TestClient:
@@ -71,3 +73,36 @@ def test_register_keycloak_error(client: TestClient) -> None:
         response = client.post("/auth/register", json=VALID_REGISTER_PAYLOAD)
 
     assert response.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_me_returns_display_name_from_identity_claims() -> None:
+    from app.routers.auth import me
+
+    response = await me(Principal(
+        sub="user-1",
+        tenant_id="tenant-1",
+        email="maya@example.com",
+        roles=["compliance-officer"],
+        first_name="Maya",
+        last_name="Silva",
+    ))
+
+    assert response.display_name == "Maya Silva"
+    assert response.first_name == "Maya"
+    assert response.last_name == "Silva"
+
+
+@pytest.mark.asyncio
+async def test_me_allows_existing_tokens_without_name_claims() -> None:
+    from app.routers.auth import me
+
+    response = await me(Principal(
+        sub="user-1",
+        tenant_id="tenant-1",
+        email="legacy@example.com",
+        roles=[],
+    ))
+
+    assert response.display_name is None
+

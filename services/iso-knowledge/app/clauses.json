@@ -1,0 +1,691 @@
+[
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "10.1",
+    "keywords": [
+      "improvement opportunities",
+      "necessary actions",
+      "intended outcomes",
+      "environmental management system",
+      "environmental performance",
+      "compliance evaluation",
+      "internal audit",
+      "management review"
+    ],
+    "requirements": "The organization shall determine opportunities for improvement (see 9.1, 9.2 and 9.3) and implement necessary actions to achieve the intended outcomes of its environmental management system.",
+    "search_query": "Find environmental performance analysis and evaluation records, compliance evaluation results, internal audit reports, management review minutes, improvement registers, corrective action logs, and action plans showing identified improvement opportunities and actions taken to achieve environmental management system outcomes.",
+    "section": 10,
+    "title": "General"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "10.2",
+    "keywords": [
+      "nonconformity",
+      "corrective action",
+      "root cause",
+      "adverse environmental impacts",
+      "effectiveness review",
+      "environmental management system changes",
+      "documented information",
+      "recurrence prevention"
+    ],
+    "requirements": "When a nonconformity occurs, the organization shall: a) react to the nonconformity and, as applicable: 1) take action to control and correct it; 2) deal with the consequences, including mitigating adverse environmental impacts; b) evaluate the need for action to eliminate the causes of the nonconformity, in order that it does not recur or occur elsewhere, by: 1) reviewing the nonconformity; 2) determining the causes of the nonconformity; 3) determining if similar nonconformities exist, or could potentially occur; c) implement any action needed; d) review the effectiveness of any corrective action taken; e) make changes to the environmental management system, if necessary. Corrective actions shall be appropriate to the significance of the effects of the nonconformities encountered, including the environmental impact(s). The organization shall retain documented information as evidence of: \u2014 the nature of the nonconformities and any subsequent actions taken; \u2014 the results of any corrective action.",
+    "search_query": "Find nonconformity and corrective action procedures, incident and deviation reports, root-cause analyses, corrective action registers, effectiveness verification records, environmental impact consequence assessments, and documented evidence of actions taken and EMS changes.",
+    "section": 10,
+    "title": "Nonconformity and corrective action"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "10.3",
+    "keywords": [
+      "continual improvement",
+      "environmental management system",
+      "suitability",
+      "adequacy",
+      "effectiveness",
+      "environmental performance"
+    ],
+    "requirements": "The organization shall continually improve the suitability, adequacy and effectiveness of the environmental management system to enhance environmental performance.",
+    "search_query": "Environmental management system improvement plans, environmental objectives and KPI trend reports, management review records, internal audit findings, corrective action logs, and documented evidence of initiatives that enhance environmental performance.",
+    "section": 10,
+    "title": "Continual improvement"
+  },
+  {
+    "clause_id": "4.1",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "external issues",
+      "internal issues",
+      "organizational context",
+      "environmental conditions",
+      "environmental management system",
+      "intended outcomes",
+      "environmental aspects",
+      "climate change"
+    ],
+    "requirements": "The organization shall determine external and internal issues that are relevant to its purpose and that affect its ability to achieve the intended outcomes of its environmental management system. Such issues shall include environmental conditions being affected by or capable of affecting the organization.",
+    "search_query": "Find organizational context assessments, SWOT or PESTLE analyses, environmental context reviews, climate and environmental condition assessments, business risk registers, strategic planning documents, and management review records showing internal and external issues relevant to the organization\u2019s purpose and environmental management system outcomes.",
+    "section": 4,
+    "title": "Understanding the organization and its context"
+  },
+  {
+    "clause_id": "4.2",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "interested parties",
+      "needs and expectations",
+      "environmental management system",
+      "requirements",
+      "compliance obligations",
+      "legal requirements",
+      "other requirements"
+    ],
+    "requirements": "The organization shall determine: a) the interested parties that are relevant to the environmental management system; b) the relevant needs and expectations (i.e. requirements) of these interested parties; c) which of these needs and expectations become its compliance obligations.",
+    "search_query": "Find the interested parties or stakeholder register, environmental requirements matrix, compliance obligations register, legal and regulatory register, customer and community agreements, permits, licences, contracts, and records showing relevant stakeholder needs and expectations were identified and assessed for adoption as compliance obligations.",
+    "section": 4,
+    "title": "Understanding the needs and expectations of interested parties"
+  },
+  {
+    "clause_id": "4.3",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "environmental management system scope",
+      "boundaries and applicability",
+      "compliance obligations",
+      "organizational units",
+      "physical boundaries",
+      "activities products and services",
+      "control and influence",
+      "documented information",
+      "interested parties"
+    ],
+    "requirements": "The organization shall determine the boundaries and applicability of the environmental management system to establish its scope. When determining this scope, the organization shall consider: a) the external and internal issues referred to in 4.1; b) the compliance obligations referred to in 4.2; c) its organizational units, functions and physical boundaries; d) its activities, products and services; e) its authority and ability to exercise control and influence. Once the scope is defined, all activities, products and services of the organization within that scope need to be included in the environmental management system. The scope shall be maintained as documented information and be available to interested parties.",
+    "search_query": "Find the environmental management system scope statement, EMS boundary and applicability records, site and organizational unit descriptions, activity/product/service coverage, control and influence assessment, and evidence that the documented scope is maintained and available to interested parties.",
+    "section": 4,
+    "title": "Determining the scope of the environmental management system"
+  },
+  {
+    "clause_id": "4.4",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "environmental management system",
+      "intended outcomes",
+      "environmental performance",
+      "establish",
+      "implement",
+      "maintain",
+      "continual improvement",
+      "process interactions",
+      "organizational context",
+      "interested parties"
+    ],
+    "requirements": "To achieve the intended outcomes, including enhancing its environmental performance, the organization shall establish, implement, maintain and continually improve an environmental management system, including the processes needed and their interactions, in accordance with the requirements of this International Standard. The organization shall consider the knowledge gained in 4.1 and 4.2 when establishing and maintaining the environmental management system.",
+    "search_query": "Find the environmental management system manual or EMS process map showing established processes, process interactions, implementation, maintenance, continual improvement, and consideration of organizational context and interested-party requirements. Look for EMS procedures, process registers, improvement records, and context/interested-party assessment documents.",
+    "section": 4,
+    "title": "Environmental management system"
+  },
+  {
+    "clause_id": "5.1",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "top management",
+      "leadership and commitment",
+      "environmental management system",
+      "environmental policy",
+      "environmental objectives",
+      "strategic direction",
+      "business processes",
+      "resources",
+      "intended outcomes",
+      "continual improvement"
+    ],
+    "requirements": "Top management shall demonstrate leadership and commitment with respect to the environmental management system by:\na) taking accountability for the effectiveness of the environmental management system;\nb) ensuring that the environmental policy and environmental objectives are established and are compatible with the strategic direction and the context of the organization;\nc) ensuring the integration of the environmental management system requirements into the organization\u2019s business processes;\nd) ensuring that the resources needed for the environmental management system are available;\ne) communicating the importance of effective environmental management and of conforming to the environmental management system requirements;\nf) ensuring that the environmental management system achieves its intended outcomes;\ng) directing and supporting persons to contribute to the effectiveness of the environmental management system;\nh) promoting continual improvement;\ni) supporting other relevant management roles to demonstrate their leadership as it applies to their areas of responsibility.",
+    "search_query": "Find evidence of executive leadership and accountability for the environmental management system, including signed environmental policy and objectives, management meeting minutes, EMS integration into business plans and processes, resource approvals, leadership communications, performance reviews, and continual improvement initiatives.",
+    "section": 5,
+    "title": "Leadership and commitment"
+  },
+  {
+    "clause_id": "5.2",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "environmental policy",
+      "top management",
+      "environmental objectives",
+      "protection of the environment",
+      "prevention of pollution",
+      "compliance obligations",
+      "continual improvement",
+      "environmental performance",
+      "documented information",
+      "interested parties"
+    ],
+    "requirements": "Top management shall establish, implement and maintain an environmental policy that, within the defined scope of its environmental management system:\na) is appropriate to the purpose and context of the organization, including the nature, scale and environmental impacts of its activities, products and services;\nb) provides a framework for setting environmental objectives;\nc) includes a commitment to the protection of the environment, including prevention of pollution and other specific commitment(s) relevant to the context of the organization;\nd) includes a commitment to fulfil its compliance obligations;\ne) includes a commitment to continual improvement of the environmental management system to enhance environmental performance.\n\nThe environmental policy shall:\n\u2014 be maintained as documented information;\n\u2014 be communicated within the organization;\n\u2014 be available to interested parties.",
+    "search_query": "Environmental policy document approved by top management, including pollution prevention, environmental protection, compliance obligations, continual improvement, and environmental objectives; evidence of policy communication to employees and availability to interested parties.",
+    "section": 5,
+    "title": "Environmental policy"
+  },
+  {
+    "clause_id": "5.3",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "top management",
+      "organizational roles",
+      "responsibilities",
+      "authorities",
+      "assigned responsibilities",
+      "communicated roles",
+      "environmental management system conformity",
+      "environmental performance reporting"
+    ],
+    "requirements": "Top management shall ensure that the responsibilities and authorities for relevant roles are assigned and communicated within the organization. Top management shall assign the responsibility and authority for: a) ensuring that the environmental management system conforms to the requirements of this International Standard; b) reporting on the performance of the environmental management system, including environmental performance, to top management.",
+    "search_query": "Find environmental management system organization charts, role descriptions, responsibility and authority matrices, appointment letters, delegation records, and management review or EMS performance reports showing assigned roles and reporting to top management.",
+    "section": 5,
+    "title": "Organizational roles, responsibilities and authorities"
+  },
+  {
+    "clause_id": "6.1",
+    "version_id": "iso-14001-3",
+    "keywords": [
+      "environmental aspects",
+      "environmental impacts",
+      "risks and opportunities",
+      "compliance obligations",
+      "life cycle perspective",
+      "significant environmental aspects",
+      "emergency situations",
+      "documented information",
+      "planning action"
+    ],
+    "requirements": "6.1.1 General\n\nThe organization shall establish, implement and maintain the process(es) needed to meet the requirements in 6.1.1 to 6.1.4.\n\nWhen planning for the environmental management system, the organization shall consider:\n\na) the issues referred to in 4.1;\n\nb) the requirements referred to in 4.2;\n\nc) the scope of its environmental management system;\n\nand determine the risks and opportunities, related to its environmental aspects (see 6.1.2), compliance obligations (see 6.1.3) and other issues and requirements, identified in 4.1 and 4.2, that need to be addressed to:\n\n\u2014 give assurance that the environmental management system can achieve its intended outcomes;\n\n\u2014 prevent or reduce undesired effects, including the potential for external environmental conditions to affect the organization;\n\n\u2014 achieve continual improvement.\n\nWithin the scope of the environmental management system, the organization shall determine potential emergency situations, including those that can have an environmental impact.\n\nThe organization shall maintain documented information of its:\n\n\u2014 risks and opportunities that need to be addressed;\n\n\u2014 process(es) needed in 6.1.1 to 6.1.4, to the extent necessary to have confidence they are carried out as planned.\n\n6.1.2 Environmental aspects\n\nWithin the defined scope of the environmental management system, the organization shall determine the environmental aspects of its activities, products and services that it can control and those that it can influence, and their associated environmental impacts, considering a life cycle perspective.\n\nWhen determining environmental aspects, the organization shall take into account:\n\na) change, including planned or new developments, and new or modified activities, products and services;\n\nb) abnormal conditions and reasonably foreseeable emergency situations.\n\nThe organization shall determine those aspects that have or can have a significant environmental impact, i.e. significant environmental aspects, by using established criteria.\n\nThe organization shall communicate its significant environmental aspects among the various levels and functions of the organization, as appropriate.\n\nThe organization shall maintain documented information of its:\n\n\u2014 environmental aspects and associated environmental impacts;\n\n\u2014 criteria used to determine its significant environmental aspects;\n\n\u2014 significant environmental aspects.\n\n6.1.3 Compliance obligations\n\nThe organization shall:\n\na) determine and have access to the compliance obligations related to its environmental aspects;\n\nb) determine how these compliance obligations apply to the organization;\n\nc) take these compliance obligations into account when establishing, implementing, maintaining and continually improving its environmental management system.\n\nThe organization shall maintain documented information of its compliance obligations.\n\n6.1.4 Planning action\n\nThe organization shall plan:\n\na) to take actions to address its:\n\n1) significant environmental aspects;\n\n2) compliance obligations;\n\n3) risks and opportunities identified in 6.1.1;\n\nb) how to:\n\n1) integrate and implement the actions into its environmental management system processes (see 6.2, Clause 7, Clause 8 and 9.1), or other business processes;\n\n2) evaluate the effectiveness of these actions (see 9.1).\n\nWhen planning these actions, the organization shall consider its technological options and its financial, operational and business requirements.",
+    "search_query": "Find the environmental aspects and impacts register, significance evaluation criteria, legal and other requirements register, risk and opportunity assessment, emergency preparedness risk assessment, and documented action plans showing controls, responsibilities, integration into EMS processes, and effectiveness evaluation.",
+    "section": 6,
+    "title": "Actions to address risks and opportunities"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.1.1",
+    "keywords": [
+      "environmental management system",
+      "risks and opportunities",
+      "environmental aspects",
+      "compliance obligations",
+      "environmental conditions",
+      "emergency situations",
+      "intended outcomes",
+      "continual improvement",
+      "documented information"
+    ],
+    "requirements": "The organization shall establish, implement and maintain the process(es) needed to meet the requirements in 6.1.1 to 6.1.4. When planning for the environmental management system, the organization shall consider: a) the issues referred to in 4.1; b) the requirements referred to in 4.2; c) the scope of its environmental management system; and determine the risks and opportunities, related to its environmental aspects (see 6.1.2), compliance obligations (see 6.1.3) and other issues and requirements, identified in 4.1 and 4.2, that need to be addressed to: \u2014 give assurance that the environmental management system can achieve its intended outcomes; \u2014 prevent or reduce undesired effects, including the potential for external environmental conditions to affect the organization; \u2014 achieve continual improvement. Within the scope of the environmental management system, the organization shall determine potential emergency situations, including those that can have an environmental impact. The organization shall maintain documented information of its: \u2014 risks and opportunities that need to be addressed; \u2014 process(es) needed in 6.1.1 to 6.1.4, to the extent necessary to have confidence they are carried out as planned.",
+    "search_query": "Find environmental risk and opportunity assessments, EMS planning procedures, context and interested-party registers, emergency situation or environmental emergency assessments, and documented evidence of planned actions and related EMS processes.",
+    "section": 6,
+    "title": "General"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.1.2",
+    "keywords": [
+      "environmental aspects",
+      "environmental impacts",
+      "life cycle perspective",
+      "significant environmental aspects",
+      "established criteria",
+      "abnormal conditions",
+      "emergency situations",
+      "documented information"
+    ],
+    "requirements": "Within the defined scope of the environmental management system, the organization shall determine the environmental aspects of its activities, products and services that it can control and those that it can influence, and their associated environmental impacts, considering a life cycle perspective. When determining environmental aspects, the organization shall take into account: a) change, including planned or new developments, and new or modified activities, products and services; b) abnormal conditions and reasonably foreseeable emergency situations. The organization shall determine those aspects that have or can have a significant environmental impact, i.e. significant environmental aspects, by using established criteria. The organization shall communicate its significant environmental aspects among the various levels and functions of the organization, as appropriate. The organization shall maintain documented information of its: \u2014 environmental aspects and associated environmental impacts; \u2014 criteria used to determine its significant environmental aspects; \u2014 significant environmental aspects. NOTE Significant environmental aspects can result in risks and opportunities associated with either adverse environmental impacts (threats) or beneficial environmental impacts (opportunities).",
+    "search_query": "Find environmental aspect-impact registers, aspect significance evaluation criteria, life-cycle assessments, change and emergency condition reviews, and documented records showing communication of significant environmental aspects across organizational functions.",
+    "section": 6,
+    "title": "Environmental aspects"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.1.3",
+    "keywords": [
+      "compliance obligations",
+      "environmental aspects",
+      "legal requirements",
+      "other requirements",
+      "documented information",
+      "environmental management system",
+      "regulatory access"
+    ],
+    "requirements": "The organization shall: a) determine and have access to the compliance obligations related to its environmental aspects; b) determine how these compliance obligations apply to the organization; c) take these compliance obligations into account when establishing, implementing, maintaining and continually improving its environmental management system. The organization shall maintain documented information of its compliance obligations. NOTE Compliance obligations can result in risks and opportunities to the organization.",
+    "search_query": "Find the environmental legal register or compliance obligations register, applicable permits, licenses, regulations, contractual and voluntary environmental requirements, and documented procedures or assessments showing how these obligations apply to environmental aspects and are incorporated into the environmental management system.",
+    "section": 6,
+    "title": "Compliance obligations"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.1.4",
+    "keywords": [
+      "significant environmental aspects",
+      "compliance obligations",
+      "risks and opportunities",
+      "environmental management system processes",
+      "business processes",
+      "effectiveness evaluation",
+      "technological options",
+      "financial requirements",
+      "operational requirements",
+      "business requirements"
+    ],
+    "requirements": "The organization shall plan:\n\na) to take actions to address its:\n\n1) significant environmental aspects;\n\n2) compliance obligations;\n\n3) risks and opportunities identified in 6.1.1;\n\nb) how to:\n\n1) integrate and implement the actions into its environmental management system processes (see 6.2, Clause 7, Clause 8 and 9.1), or other business processes;\n\n2) evaluate the effectiveness of these actions (see 9.1).\n\nWhen planning these actions, the organization shall consider its technological options and its financial, operational and business requirements.",
+    "search_query": "Find environmental action plans, risk and opportunity registers, significant aspect registers, legal/compliance registers, EMS implementation procedures, operational control plans, and effectiveness evaluation or performance review records showing actions integrated into business processes and consideration of technology, financial, operational, and business requirements.",
+    "section": 6,
+    "title": "Planning action"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.2",
+    "keywords": [
+      "environmental objectives",
+      "significant environmental aspects",
+      "compliance obligations",
+      "risks and opportunities",
+      "environmental policy",
+      "documented information",
+      "indicators",
+      "monitoring progress",
+      "business processes"
+    ],
+    "requirements": "### 6.2.1 Environmental objectives\n\nThe organization shall establish environmental objectives at relevant functions and levels, taking into account the organization's significant environmental aspects and associated compliance obligations, and considering its risks and opportunities.\n\nThe environmental objectives shall be:\n\na) consistent with the environmental policy;\n\nb) measurable (if practicable);\n\nc) monitored;\n\nd) communicated;\n\ne) updated as appropriate.\n\nThe organization shall maintain documented information on the environmental objectives.\n\n### 6.2.2 Planning actions to achieve environmental objectives\n\nWhen planning how to achieve its environmental objectives, the organization shall determine:\n\na) what will be done;\n\nb) what resources will be required;\n\nc) who will be responsible;\n\nd) when it will be completed;\n\ne) how the results will be evaluated, including indicators for monitoring progress toward achievement of its measurable environmental objectives (see 9.1.1).\n\nThe organization shall consider how actions to achieve its environmental objectives can be integrated into the organization's business processes.",
+    "search_query": "Find the environmental objectives register or environmental management plan, including links to the environmental policy, significant aspects and legal/compliance register, measurable targets, indicators, responsible owners, resources, completion dates, monitoring results, and evidence that objectives are integrated into business processes.",
+    "section": 6,
+    "title": "Environmental objectives and planning to achieve them"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.2.1",
+    "keywords": [
+      "environmental objectives",
+      "significant environmental aspects",
+      "compliance obligations",
+      "risks and opportunities",
+      "environmental policy",
+      "measurable objectives",
+      "monitoring",
+      "documented information"
+    ],
+    "requirements": "The organization shall establish environmental objectives at relevant functions and levels, taking into account the organization's significant environmental aspects and associated compliance obligations, and considering its risks and opportunities. The environmental objectives shall be: a) consistent with the environmental policy; b) measurable (if practicable); c) monitored; d) communicated; e) updated as appropriate. The organization shall maintain documented information on the environmental objectives.",
+    "search_query": "Find the environmental objectives register or EMS objectives plan, including measurable targets, links to significant environmental aspects and compliance obligations, risk and opportunity considerations, assigned functions and levels, monitoring results, communication records, update history, and controlled documented information.",
+    "section": 6,
+    "title": "Environmental objectives"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "6.2.2",
+    "keywords": [
+      "environmental objectives",
+      "action planning",
+      "resources",
+      "responsibilities",
+      "completion dates",
+      "results evaluation",
+      "monitoring indicators",
+      "business processes"
+    ],
+    "requirements": "When planning how to achieve its environmental objectives, the organization shall determine:\n\na) what will be done;\n\nb) what resources will be required;\n\nc) who will be responsible;\n\nd) when it will be completed;\n\ne) how the results will be evaluated, including indicators for monitoring progress toward achievement of its measurable environmental objectives (see 9.1.1).\n\nThe organization shall consider how actions to achieve its environmental objectives can be integrated into the organization's business processes.",
+    "search_query": "Environmental objectives action plans, environmental improvement programmes, assigned responsibilities, resource and budget plans, target completion dates, progress monitoring indicators, performance evaluation records, and integration into business processes.",
+    "section": 6,
+    "title": "Planning actions to achieve environmental objectives"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.1",
+    "keywords": [
+      "resources",
+      "environmental management system",
+      "establishment",
+      "implementation",
+      "maintenance",
+      "continual improvement"
+    ],
+    "requirements": "The organization shall determine and provide the resources needed for the establishment, implementation, maintenance and continual improvement of the environmental management system.",
+    "search_query": "Find environmental management system resource planning documents, budgets, staffing plans, infrastructure and equipment records, technology provisions, and management review evidence showing resources are provided for EMS implementation, maintenance, and continual improvement.",
+    "section": 7,
+    "title": "Resources"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.2",
+    "keywords": [
+      "competence requirements",
+      "environmental performance",
+      "compliance obligations",
+      "education training experience",
+      "training needs",
+      "competence acquisition",
+      "effectiveness evaluation",
+      "documented evidence"
+    ],
+    "requirements": "The organization shall:\na) determine the necessary competence of person(s) doing work under its control that affects its environmental performance and its ability to fulfil its compliance obligations;\nb) ensure that these persons are competent on the basis of appropriate education, training or experience;\nc) determine training needs associated with its environmental aspects and its environmental management system;\nd) where applicable, take actions to acquire the necessary competence, and evaluate the effectiveness of the actions taken.\n\nNOTE Applicable actions can include, for example, the provision of training to, the mentoring of, or the re-assignment of currently employed persons; or the hiring or contracting of competent persons.\n\nThe organization shall retain appropriate documented information as evidence of competence.",
+    "search_query": "Environmental competence matrix, job descriptions, qualification and experience records, environmental training needs analysis, training plans and attendance records, competency evaluations, mentoring or reassignment records, and evidence of contracted personnel competence.",
+    "section": 7,
+    "title": "Competence"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.3",
+    "keywords": [
+      "environmental policy",
+      "significant environmental aspects",
+      "environmental impacts",
+      "environmental management system effectiveness",
+      "environmental performance",
+      "compliance obligations",
+      "personnel awareness",
+      "nonconformity implications"
+    ],
+    "requirements": "The organization shall ensure that persons doing work under the organization\u2019s control are aware of:\na) the environmental policy;\nb) the significant environmental aspects and related actual or potential environmental impacts associated with their work;\nc) their contribution to the effectiveness of the environmental management system, including the benefits of enhanced environmental performance;\nd) the implications of not conforming with the environmental management system requirements, including not fulfilling the organization\u2019s compliance obligations.",
+    "search_query": "Find environmental awareness training materials, induction presentations, toolbox talks, employee communication records, and training attendance records showing awareness of the environmental policy, significant environmental aspects and impacts, EMS contributions, environmental performance benefits, and compliance obligations.",
+    "section": 7,
+    "title": "Awareness"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.4",
+    "keywords": [
+      "internal communication",
+      "external communication",
+      "communication processes",
+      "compliance obligations",
+      "environmental information",
+      "interested parties",
+      "documented communication records",
+      "continual improvement"
+    ],
+    "requirements": "## 7.4 Communication\n\n### 7.4.1 General\n\nThe organization shall establish, implement and maintain the process(es) needed for internal and external communications relevant to the environmental management system, including:\n\na) on what it will communicate;\n\nb) when to communicate;\n\nc) with whom to communicate;\n\nd) how to communicate.\n\nWhen establishing its communication process(es), the organization shall:\n\n\u2014 take into account its compliance obligations;\n\n\u2014 ensure that environmental information communicated is consistent with information generated within the environmental management system, and is reliable.\n\nThe organization shall respond to relevant communications on its environmental management system.\n\nThe organization shall retain documented information as evidence of its communications, as appropriate.\n\n### 7.4.2 Internal communication\n\nThe organization shall:\n\na) internally communicate information relevant to the environmental management system among the various levels and functions of the organization, including changes to the environmental management system, as appropriate;\n\nb) ensure its communication process(es) enable(s) persons doing work under the organization\u2019s control to contribute to continual improvement.\n\n### 7.4.3 External communication\n\nThe organization shall externally communicate information relevant to the environmental management system, as established by the organization\u2019s communication process(es) and as required by its compliance obligations.",
+    "search_query": "Environmental communication procedure, communication matrix, internal and external stakeholder communications, regulatory correspondence, environmental performance reports, complaints and response records, and documented evidence of EMS information sharing and continual improvement feedback.",
+    "section": 7,
+    "title": "Communication"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.4.1",
+    "keywords": [
+      "internal and external communication",
+      "communication processes",
+      "environmental information",
+      "compliance obligations",
+      "reliable information",
+      "relevant communications",
+      "documented information",
+      "communication records"
+    ],
+    "requirements": "The organization shall establish, implement and maintain the process(es) needed for internal and external communications relevant to the environmental management system, including: a) on what it will communicate; b) when to communicate; c) with whom to communicate; d) how to communicate. When establishing its communication process(es), the organization shall: \u2014 take into account its compliance obligations; \u2014 ensure that environmental information communicated is consistent with information generated within the environmental management system, and is reliable. The organization shall respond to relevant communications on its environmental management system. The organization shall retain documented information as evidence of its communications, as appropriate.",
+    "search_query": "Environmental communication procedure and communication matrix covering internal/external audiences, topics, timing, methods, compliance obligations, and response handling; environmental reports, stakeholder correspondence, complaints and communication records.",
+    "section": 7,
+    "title": "General"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.4.2",
+    "keywords": [
+      "internal communication",
+      "environmental management system",
+      "organizational levels",
+      "organizational functions",
+      "EMS changes",
+      "communication processes",
+      "continual improvement",
+      "persons under control"
+    ],
+    "requirements": "The organization shall: a) internally communicate information relevant to the environmental management system among the various levels and functions of the organization, including changes to the environmental management system, as appropriate; b) ensure its communication process(es) enable(s) persons doing work under the organization\u2019s control to contribute to continual improvement.",
+    "search_query": "Find internal EMS communication procedures, environmental policy and objective briefings, change-management notices, department meeting minutes, employee or contractor feedback channels, and continual improvement suggestions or records demonstrating information is shared across organizational levels and functions.",
+    "section": 7,
+    "title": "Internal communication"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.4.3",
+    "keywords": [
+      "external communication",
+      "environmental management system",
+      "communication processes",
+      "compliance obligations",
+      "environmental information",
+      "interested parties"
+    ],
+    "requirements": "The organization shall externally communicate information relevant to the environmental management system, as established by the organization\u2019s communication process(es) and as required by its compliance obligations.",
+    "search_query": "Find environmental communication procedures, external stakeholder and regulator correspondence, environmental reports, sustainability disclosures, permit or compliance submissions, and records of responses to external environmental inquiries.",
+    "section": 7,
+    "title": "External communication"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.5",
+    "keywords": [
+      "documented information",
+      "document control",
+      "identification and description",
+      "format and media",
+      "review and approval",
+      "version control",
+      "retention and disposition",
+      "external-origin information"
+    ],
+    "requirements": "7.5.1 General\n\nThe organization\u2019s environmental management system shall include:\n\na) documented information required by this International Standard;\n\nb) documented information determined by the organization as being necessary for the effectiveness of the environmental management system.\n\n7.5.2 Creating and updating\n\nWhen creating and updating documented information, the organization shall ensure appropriate:\n\na) identification and description (e.g. a title, date, author, or reference number);\n\nb) format (e.g. language, software version, graphics) and media (e.g. paper, electronic);\n\nc) review and approval for suitability and adequacy.\n\n7.5.3 Control of documented information\n\nDocumented information required by the environmental management system and by this International Standard shall be controlled to ensure:\n\na) it is available and suitable for use, where and when it is needed;\n\nb) it is adequately protected (e.g. from loss of confidentiality, improper use, or loss of integrity).\n\nFor the control of documented information, the organization shall address the following activities as applicable:\n\n\u2014 distribution, access, retrieval and use;\n\n\u2014 storage and preservation, including preservation of legibility;\n\n\u2014 control of changes (e.g. version control);\n\n\u2014 retention and disposition.\n\nDocumented information of external origin determined by the organization to be necessary for the planning and operation of the environmental management system shall be identified, as appropriate, and controlled.",
+    "search_query": "Environmental management system document control procedure, controlled document register, approved environmental policies and procedures, revision/version history, document review and approval records, access permissions, retention schedule, archived records, and controlled external documents.",
+    "section": 7,
+    "title": "Documented information"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.5.1",
+    "keywords": [
+      "documented information",
+      "environmental management system",
+      "document control",
+      "effectiveness",
+      "ISO 14001 requirements",
+      "EMS documentation"
+    ],
+    "requirements": "The organization\u2019s environmental management system shall include: a) documented information required by this International Standard; b) documented information determined by the organization as being necessary for the effectiveness of the environmental management system.",
+    "search_query": "Find the environmental management system manual, documented information register, EMS procedures, work instructions, and records demonstrating that required ISO 14001 documentation and organization-defined documents necessary for EMS effectiveness are maintained.",
+    "section": 7,
+    "title": "General"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.5.2",
+    "keywords": [
+      "documented information",
+      "identification",
+      "description",
+      "format",
+      "media",
+      "review",
+      "approval",
+      "suitability",
+      "adequacy"
+    ],
+    "requirements": "When creating and updating documented information, the organization shall ensure appropriate: a) identification and description (e.g. a title, date, author, or reference number); b) format (e.g. language, software version, graphics) and media (e.g. paper, electronic); c) review and approval for suitability and adequacy.",
+    "search_query": "Find document control procedures, document registers, controlled forms and templates showing document titles, dates, authors or reference numbers, specified formats and media, plus review and approval records for suitability and adequacy.",
+    "section": 7,
+    "title": "Creating and updating"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "7.5.3",
+    "keywords": [
+      "documented information",
+      "document control",
+      "distribution and access",
+      "retrieval and use",
+      "storage and preservation",
+      "version control",
+      "retention and disposition",
+      "external-origin documents"
+    ],
+    "requirements": "Documented information required by the environmental management system and by this International Standard shall be controlled to ensure: a) it is available and suitable for use, where and when it is needed; b) it is adequately protected (e.g. from loss of confidentiality, improper use, or loss of integrity). For the control of documented information, the organization shall address the following activities as applicable: \u2014 distribution, access, retrieval and use; \u2014 storage and preservation, including preservation of legibility; \u2014 control of changes (e.g. version control); \u2014 retention and disposition. Documented information of external origin determined by the organization to be necessary for the planning and operation of the environmental management system shall be identified, as appropriate, and controlled.",
+    "search_query": "Document control procedure, document register, controlled forms and records showing approval, revision/version control, distribution and access permissions, retrieval, secure storage, legibility, retention and disposal. Search for registers identifying and controlling external documents such as laws, permits, standards, supplier specifications and regulatory guidance.",
+    "section": 7,
+    "title": "Control of documented information"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "8.1",
+    "keywords": [
+      "operational controls",
+      "operating criteria",
+      "planned changes",
+      "outsourced processes",
+      "life cycle perspective",
+      "environmental requirements",
+      "external providers",
+      "documented information"
+    ],
+    "requirements": "The organization shall establish, implement, control and maintain the processes needed to meet environmental management system requirements, and to implement the actions identified in 6.1 and 6.2, by: \u2014 establishing operating criteria for the process(es); \u2014 implementing control of the process(es), in accordance with the operating criteria. NOTE Controls can include engineering controls and procedures. Controls can be implemented following a hierarchy (e.g. elimination, substitution, administrative) and can be used individually or in combination. The organization shall control planned changes and review the consequences of unintended changes, taking action to mitigate any adverse effects, as necessary. The organization shall ensure that outsourced processes are controlled or influenced. The type and extent of control or influence to be applied to the process(es) shall be defined within the environmental management system. Consistent with a life cycle perspective, the organization shall: a) establish controls, as appropriate, to ensure that its environmental requirement(s) is (are) addressed in the design and development process for the product or service, considering each life cycle stage; b) determine its environmental requirement(s) for the procurement of products and services, as appropriate; c) communicate its relevant environmental requirement(s) to external providers, including contractors; d) consider the need to provide information about potential significant environmental impacts associated with the transportation or delivery, use, end-of-life treatment and final disposal of its products and services. The organization shall maintain documented information to the extent necessary to have confidence that the processes have been carried out as planned.",
+    "search_query": "Find operational control procedures, work instructions, operating criteria, management-of-change records, outsourced process and contractor controls, procurement specifications, design and development environmental reviews, supplier communication records, and documented evidence that processes were carried out as planned.",
+    "section": 8,
+    "title": "Operational planning and control"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "8.2",
+    "keywords": [
+      "emergency situations",
+      "emergency preparedness",
+      "response actions",
+      "environmental impacts",
+      "mitigation",
+      "periodic testing",
+      "emergency response training",
+      "documented information"
+    ],
+    "requirements": "The organization shall establish, implement and maintain the process(es) needed to prepare for and respond to potential emergency situations identified in 6.1.1. The organization shall: a) prepare to respond by planning actions to prevent or mitigate adverse environmental impacts from emergency situations; b) respond to actual emergency situations; c) take action to prevent or mitigate the consequences of emergency situations, appropriate to the magnitude of the emergency and the potential environmental impact; d) periodically test the planned response actions, where practicable; e) periodically review and revise the process(es) and planned response actions, in particular after the occurrence of emergency situations or tests; f) provide relevant information and training related to emergency preparedness and response, as appropriate, to relevant interested parties, including persons working under its control. The organization shall maintain documented information to the extent necessary to have confidence that the process(es) is (are) carried out as planned.",
+    "search_query": "Emergency preparedness and response procedures, emergency response plans, spill and fire response instructions, environmental emergency risk assessments, drill and exercise records, post-incident reviews, responder training records, and communications with contractors or emergency services.",
+    "section": 8,
+    "title": "Emergency preparedness and response"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.1",
+    "keywords": [
+      "environmental performance",
+      "monitoring and measurement",
+      "analysis and evaluation",
+      "performance indicators",
+      "calibrated equipment",
+      "documented information",
+      "compliance obligations",
+      "compliance status"
+    ],
+    "requirements": "### 9.1.1 General\n\nThe organization shall monitor, measure, analyse and evaluate its environmental performance.\n\nThe organization shall determine:\n\na) what needs to be monitored and measured;\n\nb) the methods for monitoring, measurement, analysis and evaluation, as applicable, to ensure valid results;\n\nc) the criteria against which the organization will evaluate its environmental performance, and appropriate indicators;\n\nd) when the monitoring and measuring shall be performed;\n\ne) when the results from monitoring and measurement shall be analysed and evaluated.\n\nThe organization shall ensure that calibrated or verified monitoring and measurement equipment is used and maintained, as appropriate.\n\nThe organization shall evaluate its environmental performance and the effectiveness of the environmental management system.\n\nThe organization shall communicate relevant environmental performance information both internally and externally, as identified in its communication process(es) and as required by its compliance obligations.\n\nThe organization shall retain appropriate documented information as evidence of the monitoring, measurement, analysis and evaluation results.\n\n### 9.1.2 Evaluation of compliance\n\nThe organization shall establish, implement and maintain the process(es) needed to evaluate fulfilment of its compliance obligations.\n\nThe organization shall:\n\na) determine the frequency that compliance will be evaluated;\n\nb) evaluate compliance and take action if needed;\n\nc) maintain knowledge and understanding of its compliance status.\n\nThe organization shall retain documented information as evidence of the compliance evaluation result(s).",
+    "search_query": "Environmental monitoring and measurement procedure, environmental performance indicators and KPI dashboards, calibrated equipment records, sampling and laboratory results, compliance evaluation reports, legal register review records, compliance status logs, and documented analysis of environmental performance trends.",
+    "section": 9,
+    "title": "Monitoring, measurement, analysis and evaluation"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.1.1",
+    "keywords": [
+      "environmental performance",
+      "monitoring and measurement",
+      "analysis and evaluation",
+      "performance indicators",
+      "calibrated equipment",
+      "verified equipment",
+      "communication process",
+      "documented information"
+    ],
+    "requirements": "The organization shall monitor, measure, analyse and evaluate its environmental performance. The organization shall determine: a) what needs to be monitored and measured; b) the methods for monitoring, measurement, analysis and evaluation, as applicable, to ensure valid results; c) the criteria against which the organization will evaluate its environmental performance, and appropriate indicators; d) when the monitoring and measuring shall be performed; e) when the results from monitoring and measurement shall be analysed and evaluated. The organization shall ensure that calibrated or verified monitoring and measurement equipment is used and maintained, as appropriate. The organization shall evaluate its environmental performance and the effectiveness of the environmental management system. The organization shall communicate relevant environmental performance information both internally and externally, as identified in its communication process(es) and as required by its compliance obligations. The organization shall retain appropriate documented information as evidence of the monitoring, measurement, analysis and evaluation results.",
+    "search_query": "Environmental monitoring and measurement plans, performance indicator dashboards, sampling and analysis results, calibration or verification records for monitoring equipment, environmental performance evaluations, internal and external environmental reports, and retained monitoring records.",
+    "section": 9,
+    "title": "General"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.1.2",
+    "keywords": [
+      "compliance obligations",
+      "compliance evaluation",
+      "compliance status",
+      "evaluation frequency",
+      "legal requirements",
+      "corrective action",
+      "documented information",
+      "compliance records"
+    ],
+    "requirements": "The organization shall establish, implement and maintain the process(es) needed to evaluate fulfilment of its compliance obligations. The organization shall: a) determine the frequency that compliance will be evaluated; b) evaluate compliance and take action if needed; c) maintain knowledge and understanding of its compliance status. The organization shall retain documented information as evidence of the compliance evaluation result(s).",
+    "search_query": "Environmental compliance evaluation procedure, legal register, regulatory compliance calendar, permit and licence review records, compliance audit reports, corrective action logs, and documented evidence of current compliance status.",
+    "section": 9,
+    "title": "Evaluation of compliance"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.2",
+    "keywords": [
+      "internal audit programme",
+      "audit criteria",
+      "audit scope",
+      "audit frequency",
+      "auditor objectivity",
+      "audit impartiality",
+      "audit results",
+      "documented information"
+    ],
+    "requirements": "### 9.2.1 General\n\nThe organization shall conduct internal audits at planned intervals to provide information on whether the environmental management system:\n\na) conforms to:\n\n1) the organization\u2019s own requirements for its environmental management system;\n\n2) the requirements of this International Standard;\n\nb) is effectively implemented and maintained.\n\n### 9.2.2 Internal audit programme\n\nThe organization shall establish, implement and maintain (an) internal audit programme(s), including the frequency, methods, responsibilities, planning requirements and reporting of its internal audits.\n\nWhen establishing the internal audit programme, the organization shall take into consideration the environmental importance of the processes concerned, changes affecting the organization and the results of previous audits.\n\nThe organization shall:\n\na) define the audit criteria and scope for each audit;\n\nb) select auditors and conduct audits to ensure objectivity and the impartiality of the audit process;\n\nc) ensure that the results of the audits are reported to relevant management.\n\nThe organization shall retain documented information as evidence of the implementation of the audit programme and the audit results.",
+    "search_query": "Environmental internal audit programme, audit schedule, audit procedure, audit plans defining criteria and scope, auditor assignments and independence, completed audit reports, findings, and retained audit records showing results reported to management.",
+    "section": 9,
+    "title": "Internal audit"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.2.1",
+    "keywords": [
+      "internal audits",
+      "planned intervals",
+      "environmental management system",
+      "audit conformity",
+      "organizational requirements",
+      "ISO 14001 requirements",
+      "effective implementation",
+      "system maintenance"
+    ],
+    "requirements": "The organization shall conduct internal audits at planned intervals to provide information on whether the environmental management system: a) conforms to: 1) the organization\u2019s own requirements for its environmental management system; 2) the requirements of this International Standard; b) is effectively implemented and maintained.",
+    "search_query": "Find internal audit procedures, approved audit schedules, audit plans, completed audit checklists and audit reports demonstrating that the environmental management system is assessed at planned intervals against organizational requirements and ISO 14001 requirements, including evidence of effective implementation and maintenance.",
+    "section": 9,
+    "title": "General"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.2.2",
+    "keywords": [
+      "internal audit programme",
+      "audit frequency",
+      "audit methods",
+      "audit criteria",
+      "audit scope",
+      "auditor impartiality",
+      "audit reporting",
+      "audit results",
+      "documented information"
+    ],
+    "requirements": "The organization shall establish, implement and maintain (an) internal audit programme(s), including the frequency, methods, responsibilities, planning requirements and reporting of its internal audits. When establishing the internal audit programme, the organization shall take into consideration the environmental importance of the processes concerned, changes affecting the organization and the results of previous audits. The organization shall: a) define the audit criteria and scope for each audit; b) select auditors and conduct audits to ensure objectivity and the impartiality of the audit process; c) ensure that the results of the audits are reported to relevant management. The organization shall retain documented information as evidence of the implementation of the audit programme and the audit results.",
+    "search_query": "Find internal audit programme and schedule, audit procedure, audit plans defining criteria and scope, auditor assignment or competence records, completed audit reports, management communication of findings, and retained audit programme/results records.",
+    "section": 9,
+    "title": "Internal audit programme"
+  },
+  {
+    "version_id": "iso-14001-3",
+    "clause_id": "9.3",
+    "keywords": [
+      "management review",
+      "environmental management system",
+      "environmental performance trends",
+      "environmental objectives",
+      "compliance obligations",
+      "nonconformities and corrective actions",
+      "audit results",
+      "continual improvement",
+      "documented information"
+    ],
+    "requirements": "Top management shall review the organization\u2019s environmental management system, at planned intervals, to ensure its continuing suitability, adequacy and effectiveness. The management review shall include consideration of: a) the status of actions from previous management reviews; b) changes in: 1) external and internal issues that are relevant to the environmental management system; 2) the needs and expectations of interested parties, including compliance obligations; 3) its significant environmental aspects; 4) risks and opportunities; c) the extent to which environmental objectives have been achieved; d) information on the organization\u2019s environmental performance, including trends in: 1) nonconformities and corrective actions; 2) monitoring and measurement results; 3) fulfilment of its compliance obligations; 4) audit results; e) adequacy of resources; f) relevant communication(s) from interested parties, including complaints; g) opportunities for continual improvement. The outputs of the management review shall include: \u2014 conclusions on the continuing suitability, adequacy and effectiveness of the environmental management system; \u2014 decisions related to continual improvement opportunities; \u2014 decisions related to any need for changes to the environmental management system, including resources; \u2014 actions, if needed, when environmental objectives have not been achieved; \u2014 opportunities to improve integration of the environmental management system with other business processes, if needed; \u2014 any implications for the strategic direction of the organization. The organization shall retain documented information as evidence of the results of management reviews.",
+    "search_query": "Find environmental management review meeting minutes, management review agendas and presentations, EMS performance reports, environmental objectives status, compliance evaluation results, internal audit reports, corrective action logs, interested-party complaints, resource decisions, and records of management review actions and follow-up.",
+    "section": 9,
+    "title": "Management review"
+  }
+]

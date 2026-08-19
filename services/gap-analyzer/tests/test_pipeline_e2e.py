@@ -100,7 +100,9 @@ def _install_common_mocks(monkeypatch: pytest.MonkeyPatch, chunks: list[dict[str
     async def fake_embed_query(_text: str) -> list[float]:
         return [0.1, 0.2, 0.3]
 
-    async def fake_hybrid_retrieve(_db: Any, _tenant_id: str, _query: str, _vector: list[float]) -> list[dict[str, Any]]:
+    async def fake_hybrid_retrieve(
+        _db: Any, _tenant_id: str, _profile_id: str, _query: str, _vector: list[float]
+    ) -> list[dict[str, Any]]:
         return list(chunks)
 
     monkeypatch.setattr(ac, "embed_query", fake_embed_query)
@@ -132,7 +134,7 @@ async def test_pipeline_no_chunks_abstains(monkeypatch: pytest.MonkeyPatch) -> N
     _install_common_mocks(monkeypatch, chunks=[])
     db = _FakeDB()
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     assert result["decision"] == "Insufficient Evidence"
     assert db.result_store.upserted, "expected a persisted result"
@@ -166,7 +168,7 @@ async def test_pipeline_low_score_chunks_proceed_as_degraded(monkeypatch: pytest
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
     assert result["decision"] != "Insufficient Evidence"
     assert result["evidence_status"] == "degraded"
 
@@ -186,7 +188,7 @@ async def test_pipeline_no_chunks_still_abstains(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(ac, "stream_structured", fail_if_called)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
     assert result["decision"] == "Insufficient Evidence"
 
 
@@ -211,7 +213,7 @@ async def test_pipeline_happy_path_grounded_met(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     assert result["decision"] == "Met"
     assert calls == ["slot_fill", "gap_analyse", "groundedness_judge"]
@@ -250,7 +252,7 @@ async def test_pipeline_fabricated_citation_triggers_repair_then_succeeds(monkey
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     assert gap_analyse_call_count == 2, "expected exactly one repair retry"
     assert result["decision"] == "Met"
@@ -281,7 +283,7 @@ async def test_pipeline_persistent_ungrounded_verdict_abstains(monkeypatch: pyte
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     assert result["decision"] == "Insufficient Evidence"
 
@@ -306,7 +308,7 @@ async def test_pipeline_reconciles_llm_decision_against_slot_fills(monkeypatch: 
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     assert result["decision"] == "Partially Met"
     assert "Reconciliation note" in result["reasoning"]
@@ -337,7 +339,7 @@ async def test_pipeline_unfilled_required_slots_derive_not_met(monkeypatch: pyte
 
     monkeypatch.setattr(ac, "stream_structured", fake_stream_structured)
 
-    result = await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+    result = await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     assert result["decision"] == "Not Met"
     assert all(f["material"] for f in result["findings"])
@@ -362,7 +364,7 @@ async def test_pipeline_paused_analysis_raises(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(db.analyses, "find_one", paused_find_one)
 
     with pytest.raises(ac.AnalysisPaused):
-        await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+        await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
 
 @pytest.mark.asyncio
@@ -383,7 +385,7 @@ async def test_slot_fill_hard_failure_propagates_instead_of_degrading(monkeypatc
     monkeypatch.setattr(ac, "stream_structured", failing_stream_structured)
 
     with pytest.raises(Exception, match="simulated hard failure"):
-        await ac.analyse_clause(db, "tenant-1", "analysis-1", CLAUSE)
+        await ac.analyse_clause(db, "tenant-1", "profile-1", "analysis-1", CLAUSE)
 
     # Nothing should have been persisted — the actor is responsible for recording Error.
     assert db.result_store.upserted == []

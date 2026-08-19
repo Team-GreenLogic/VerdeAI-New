@@ -3,10 +3,71 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    width: 100%;
+    min-height: 100%;
+  }
+
   body {
     @apply bg-gray-50 text-slate-900 antialiased;
     font-family: 'Inter', sans-serif;
+    margin: 0;
+    overflow-x: hidden;
   }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-100;
+  }
+}
+
+/* Legacy pages use Tailwind's light palette directly. These semantic dark
+   mappings keep every existing screen coherent while new components use
+   explicit dark: variants. */
+@layer utilities {
+  .dark .bg-white { background-color: rgb(15 23 42); }
+  .dark .bg-white\/80, .dark .bg-white\/90 { background-color: rgb(15 23 42 / .9); }
+  .dark .bg-gray-50, .dark .bg-slate-50 { background-color: rgb(2 6 23); }
+  .dark .bg-gray-100, .dark .bg-slate-100 { background-color: rgb(30 41 59); }
+  .dark .text-slate-900, .dark .text-slate-800, .dark .text-gray-900 { color: rgb(241 245 249); }
+  .dark .text-slate-700, .dark .text-slate-600, .dark .text-gray-700 { color: rgb(203 213 225); }
+  .dark .text-slate-500, .dark .text-gray-500 { color: rgb(148 163 184); }
+  .dark .text-slate-400, .dark .text-gray-400 { color: rgb(148 163 184); }
+  .dark .border-slate-50, .dark .border-slate-100, .dark .border-slate-200,
+  .dark .border-slate-300, .dark .border-gray-100, .dark .border-gray-200,
+  .dark .border-gray-300 { border-color: rgb(51 65 85); }
+  .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  .dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(51 65 85); }
+  .dark input, .dark textarea, .dark select { color-scheme: dark; }
+  .dark input:not([type='checkbox']):not([type='radio']), .dark textarea, .dark select {
+    background-color: rgb(15 23 42);
+    color: rgb(226 232 240);
+    border-color: rgb(71 85 105);
+  }
+  .dark .hover\:bg-gray-50:hover, .dark .hover\:bg-gray-100:hover,
+  .dark .hover\:bg-slate-50:hover, .dark .hover\:bg-slate-100:hover { background-color: rgb(30 41 59); }
+  .dark .shadow-sm, .dark .shadow-md, .dark .shadow-lg, .dark .shadow-xl { --tw-shadow-color: rgb(0 0 0 / .35); }
+
+  /* Safe fallbacks for older semantic callouts. Explicit dark:* styles win;
+     these selectors only touch components that have not yet opted in. */
+  .dark .bg-emerald-50:not([class*="dark:bg-"]), .dark .bg-emerald-100:not([class*="dark:bg-"]) { background-color: rgb(6 78 59 / .42); }
+  .dark .text-emerald-700:not([class*="dark:text-"]), .dark .text-emerald-800:not([class*="dark:text-"]) { color: rgb(167 243 208); }
+  .dark .border-emerald-100:not([class*="dark:border-"]), .dark .border-emerald-200:not([class*="dark:border-"]) { border-color: rgb(4 120 87); }
+  .dark .bg-amber-50:not([class*="dark:bg-"]), .dark .bg-amber-100:not([class*="dark:bg-"]) { background-color: rgb(120 53 15 / .38); }
+  .dark .text-amber-600:not([class*="dark:text-"]), .dark .text-amber-700:not([class*="dark:text-"]), .dark .text-amber-800:not([class*="dark:text-"]) { color: rgb(253 230 138); }
+  .dark .border-amber-100:not([class*="dark:border-"]), .dark .border-amber-200:not([class*="dark:border-"]), .dark .border-amber-300:not([class*="dark:border-"]) { border-color: rgb(180 83 9); }
+  .dark .bg-red-50:not([class*="dark:bg-"]), .dark .bg-red-100:not([class*="dark:bg-"]) { background-color: rgb(127 29 29 / .38); }
+  .dark .text-red-600:not([class*="dark:text-"]), .dark .text-red-700:not([class*="dark:text-"]), .dark .text-red-800:not([class*="dark:text-"]) { color: rgb(254 202 202); }
+  .dark .border-red-100:not([class*="dark:border-"]), .dark .border-red-200:not([class*="dark:border-"]) { border-color: rgb(185 28 28); }
+  .dark .bg-blue-50:not([class*="dark:bg-"]), .dark .bg-blue-100:not([class*="dark:bg-"]) { background-color: rgb(30 58 138 / .35); }
+  .dark .text-blue-600:not([class*="dark:text-"]), .dark .text-blue-700:not([class*="dark:text-"]), .dark .text-blue-800:not([class*="dark:text-"]) { color: rgb(191 219 254); }
+  .dark .border-blue-100:not([class*="dark:border-"]), .dark .border-blue-200:not([class*="dark:border-"]) { border-color: rgb(29 78 216); }
+  .dark .bg-brand-50:not([class*="dark:bg-"]), .dark .bg-brand-100:not([class*="dark:bg-"]) { background-color: rgb(6 78 59 / .35); }
+  .dark .text-brand-600:not([class*="dark:text-"]), .dark .text-brand-700:not([class*="dark:text-"]) { color: rgb(110 231 183); }
+  .dark .bg-brand-600:not([class*="dark:bg-"]) { background-color: rgb(4 120 87); }
+  .dark .hover\:bg-brand-700:hover:not([class*="dark:hover:bg-"]) { background-color: rgb(5 150 105); }
+  .dark .bg-amber-500:not([class*="dark:bg-"]) { background-color: rgb(180 83 9); }
+  .dark .hover\:bg-amber-600:hover:not([class*="dark:hover:bg-"]) { background-color: rgb(217 119 6); }
+  .dark .bg-red-600:not([class*="dark:bg-"]) { background-color: rgb(185 28 28); }
 }
 
 @layer utilities {
@@ -49,6 +110,8 @@
   z-index: 0;
 }
 
+.dark .bg-blob { opacity: 0.12; }
+
 .bg-blob-1 {
   width: 400px;
   height: 400px;
@@ -82,3 +145,4 @@
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
 }
+

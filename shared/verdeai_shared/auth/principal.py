@@ -10,3 +10,6 @@ class Principal(BaseModel):
     tenant_id: str    # from custom claim — required; fail if missing
     email: str
     roles: list[str]  # from realm_access.roles
+    first_name: str | None = None
+    last_name: str | None = None
+

@@ -1,4 +1,4 @@
-
+version: "3.9"
 
 services:
   api-gateway:
@@ -29,7 +29,6 @@ services:
     depends_on:
       mongodb:  { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
-      redis:    { condition: service_healthy }
 
   gap-analyzer:
     build: { context: ., dockerfile: services/gap-analyzer/Dockerfile }
@@ -69,6 +68,7 @@ services:
 
   mongodb:
     image: mongodb/mongodb-atlas-local:8.0
+    hostname: mongodb
     ports: ["27017:27017"]
     volumes:
       - mongo-data:/data/db
@@ -82,7 +82,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
-    ports: ["5673:5672", "15672:15672"]
+    ports: ["5672:5672", "15672:15672"]
     volumes:
       - rmq-data:/var/lib/rabbitmq
       - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
@@ -161,8 +161,19 @@ services:
       LANGFUSE_INIT_USER_NAME: admin
       LANGFUSE_INIT_USER_PASSWORD: admin123
 
+  demo-ui:
+    build: { context: ./demo_ui, dockerfile: Dockerfile }
+    ports: ["5173:5173"]
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_CHAT_URL: http://localhost:8001
+    depends_on:
+      - api-gateway
+
+
 volumes:
   mongo-data:
   rmq-data:
   keycloak-data:
   langfuse-data:
+

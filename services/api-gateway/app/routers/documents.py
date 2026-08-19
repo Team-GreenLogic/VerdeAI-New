@@ -11,6 +11,7 @@ from motor.motor_asyncio import AsyncIOMotorGridFSBucket  # type: ignore[import-
 
 from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
+from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
 from verdeai_shared.messaging.events import DocumentDeleted, DocumentUploaded
 
 from app.schemas.documents import (
@@ -30,10 +31,14 @@ MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 async def upload_document(
     file: UploadFile,
     principal: CurrentPrincipal,
+    profile_id: str = Query(...),
 ) -> DocumentUploadResponse:
-    """Upload a document for processing."""
+    """Upload a document for processing, scoped to one org profile."""
     tenant_id = principal.tenant_id
     db = get_database()
+
+    if await OrgProfilesRepository(db, tenant_id).get(profile_id) is None:
+        raise HTTPException(status_code=404, detail="Org profile not found")
 
     # Read and size-check
     data = await file.read()
@@ -43,8 +48,10 @@ async def upload_document(
     filename = file.filename or "unknown"
     sha256 = hashlib.sha256(data).hexdigest()
 
-    # Check for duplicate (same sha256 for this tenant, ignoring deleted docs)
-    existing = await db.documents.find_one({"tenant_id": tenant_id, "sha256": sha256, "status": {"$ne": "deleted"}})
+    # Check for duplicate (same sha256 for this tenant + profile, ignoring deleted docs)
+    existing = await db.documents.find_one({
+        "tenant_id": tenant_id, "profile_id": profile_id, "sha256": sha256, "status": {"$ne": "deleted"}
+    })
     if existing is not None:
         doc_id = str(existing["_id"])
         logger.info("Dedup hit — returning existing document", document_id=doc_id)
@@ -66,6 +73,7 @@ async def upload_document(
     now = datetime.now(timezone.utc)
     doc = {
         "tenant_id": tenant_id,
+        "profile_id": profile_id,
         "filename": filename,
         "sha256": sha256,
         "status": "queued",
@@ -81,6 +89,7 @@ async def upload_document(
     # Publish event
     event = DocumentUploaded(
         tenant_id=tenant_id,
+        profile_id=profile_id,
         document_id=document_id,
         filename=filename,
         sha256=sha256,
@@ -103,14 +112,17 @@ async def upload_document(
 async def list_documents(
     principal: CurrentPrincipal,
     status: str | None = Query(default=None),
+    profile_id: str | None = Query(default=None),
 ) -> DocumentListResponse:
-    """List documents for the current tenant."""
+    """List documents for the current tenant, optionally scoped to one org profile."""
     tenant_id = principal.tenant_id
     db = get_database()
 
     query: dict[str, object] = {"tenant_id": tenant_id}
     if status:
         query["status"] = status
+    if profile_id:
+        query["profile_id"] = profile_id
 
     cursor = db.documents.find(query, sort=[("created_at", -1)], limit=200)
     docs = await cursor.to_list(length=None)
@@ -118,6 +130,7 @@ async def list_documents(
     items = [
         DocumentItem(
             document_id=str(d["_id"]),
+            profile_id=d.get("profile_id", ""),
             filename=d.get("filename", ""),
             status=d.get("status", "unknown"),
             pages=d.get("pages"),
@@ -173,10 +186,11 @@ async def delete_document(
 
     await db.documents.update_one({"_id": oid}, {"$set": {"status": "deleted"}})
 
-    event = DocumentDeleted(tenant_id=tenant_id, document_id=document_id)
+    event = DocumentDeleted(tenant_id=tenant_id, profile_id=doc["profile_id"], document_id=document_id)
     try:
         await publish_document_deleted(event)
     except Exception as exc:
         logger.error("Failed to publish document.deleted event", error=str(exc))
 
     return DocumentDeleteResponse(status="deletion_queued")
+

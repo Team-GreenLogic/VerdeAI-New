@@ -37,10 +37,14 @@ async def handle_analysis_gaps_ready(message: IncomingMessage) -> None:
 
     db = get_database()
 
-    # AnalysisGapsReady doesn't carry version_id — look it up once so clause/state-template
-    # lookups inside generate_recommendations hit the correct (possibly custom-built) ISO version.
-    analysis_doc = await db.analyses.find_one({"analysis_id": analysis_id}, {"version_id": 1})
+    # AnalysisGapsReady doesn't carry version_id/profile_id — look them up once so
+    # clause/state-template lookups and org-profile evidence isolation inside
+    # generate_recommendations hit the correct version and org profile.
+    analysis_doc = await db.analyses.find_one(
+        {"analysis_id": analysis_id}, {"version_id": 1, "profile_id": 1}
+    )
     version_id = analysis_doc.get("version_id", DEFAULT_VERSION_ID) if analysis_doc else DEFAULT_VERSION_ID
+    profile_id = analysis_doc.get("profile_id", "") if analysis_doc else ""
 
     # Load all gap results and filter to actionable clauses
     all_results = await ResultStoreRepository(db, tenant_id).list_for_analysis(analysis_id)
@@ -58,7 +62,7 @@ async def handle_analysis_gaps_ready(message: IncomingMessage) -> None:
     for i, gap_result in enumerate(gap_results, 1):
         clause_id = gap_result.get("clause_id", "?")
         try:
-            await generate_recommendations(db, tenant_id, analysis_id, gap_result, version_id=version_id)
+            await generate_recommendations(db, tenant_id, profile_id, analysis_id, gap_result, version_id=version_id)
             logger.info(
                 "Recommendations generated",
                 clause_id=clause_id,
@@ -93,3 +97,4 @@ async def _publish_recommendations_ready(event: AnalysisRecommendationsReady) ->
         await channel.close()
     except Exception as exc:
         logger.warning("Failed to publish AnalysisRecommendationsReady", error=str(exc))
+

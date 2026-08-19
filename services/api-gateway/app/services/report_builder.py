@@ -18,23 +18,13 @@ from markupsafe import Markup
 
 from verdeai_shared.db.repositories.iso_clauses import ISOClausesRepository
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
-from verdeai_shared.db.repositories.org_profile import OrgProfileRepository
+from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 _jinja = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_DIR)),
     autoescape=select_autoescape(["html", "j2"]),
 )
-
-# Maps the flat org_profile field_path values to friendly report keys.
-_ORG_FIELDS: dict[str, str] = {
-    "name": "org.name",
-    "industry": "org.industry",
-    "size": "org.size",
-    "location": "org.location",
-    "primary_activities": "org.primary_activities",
-    "leadership_roles": "org.leadership_roles",
-}
 
 # decision -> css class used by the template for RAG colouring
 _DECISION_CLASS = {
@@ -114,9 +104,14 @@ async def build_report_context(
     }
 
     # --- Org profile (report header) ---
-    org_entries = await OrgProfileRepository(db, tenant_id, version_id=version_id).list_all()
-    value_map = {doc["field_path"]: doc.get("value") for doc in org_entries}
-    org = {key: (value_map.get(path) or None) for key, path in _ORG_FIELDS.items()}
+    profile_doc = await OrgProfilesRepository(db, tenant_id).get(analysis.get("profile_id", "")) or {}
+    org = {
+        "name": profile_doc.get("org_name"),
+        "industry": profile_doc.get("org_industry"),
+        "size": profile_doc.get("org_size"),
+        "location": profile_doc.get("org_location"),
+        "description": profile_doc.get("description"),
+    }
 
     # --- Clause catalog (titles + sections) ---
     clause_docs = await ISOClausesRepository(db).list_all(version_id=version_id)
@@ -231,3 +226,4 @@ def render_report_pdf(context: dict[str, Any]) -> bytes:
 
     html = _jinja.get_template("compliance_report.html.j2").render(**context)
     return HTML(string=html).write_pdf()
+

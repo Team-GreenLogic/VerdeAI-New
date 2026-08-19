@@ -15,11 +15,13 @@ class ChatHistoryRepository(BaseRepository):
         role: str,
         content: str,
         citations: list[dict[str, Any]] | None = None,
+        profile_id: str | None = None,
     ) -> str:
         now = datetime.now(timezone.utc)
         doc: dict[str, Any] = {
             "tenant_id": self._tenant_id,
             "session_id": session_id,
+            "profile_id": profile_id,
             "role": role,
             "content": content,
             "citations": citations or [],
@@ -36,6 +38,56 @@ class ChatHistoryRepository(BaseRepository):
         )
         items = await cursor.to_list(length=None)
         return list(reversed(items))
+
+    async def list_all(
+        self, session_id: str, profile_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Full chronological message list for one session (no cap)."""
+        extra: dict[str, Any] = {"session_id": session_id}
+        if profile_id is not None:
+            extra["profile_id"] = profile_id
+        cursor = self._col.find(
+            self._filter(extra),
+            sort=[("created_at", 1)],
+        )
+        return await cursor.to_list(length=None)
+
+    async def list_sessions(self, limit: int = 50, profile_id: str | None = None) -> list[dict[str, Any]]:
+        """One row per session for this tenant: title (first message), last activity, message count."""
+        match = self._filter({"profile_id": profile_id}) if profile_id else self._filter()
+        pipeline = [
+            {"$match": match},
+            {"$sort": {"created_at": 1}},
+            {
+                "$group": {
+                    "_id": "$session_id",
+                    "profile_id": {"$first": "$profile_id"},
+                    "title": {"$first": "$content"},
+                    "last_message_at": {"$last": "$created_at"},
+                    "message_count": {"$sum": 1},
+                }
+            },
+            {"$sort": {"last_message_at": -1}},
+            {"$limit": limit},
+            {
+                "$project": {
+                    "_id": 0,
+                    "session_id": "$_id",
+                    "profile_id": 1,
+                    "title": 1,
+                    "last_message_at": 1,
+                    "message_count": 1,
+                }
+            },
+        ]
+        return await self._col.aggregate(pipeline).to_list(length=None)
+
+    async def delete_session(self, session_id: str, profile_id: str | None = None) -> int:
+        extra: dict[str, Any] = {"session_id": session_id}
+        if profile_id is not None:
+            extra["profile_id"] = profile_id
+        result = await self._col.delete_many(self._filter(extra))
+        return result.deleted_count
 
 
 class ChatMemorySummaryRepository(BaseRepository):

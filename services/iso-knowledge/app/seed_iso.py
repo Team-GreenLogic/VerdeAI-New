@@ -568,23 +568,54 @@ async def seed_state_template(
     logger.info("State template seeded", clauses=len(items), fields_per_clause=len(_STATE_FIELDS), version_id=version_id)
 
 
-async def seed_org_profile(db: Any, tenant_id: str, version_id: str = DEFAULT_VERSION_ID) -> None:
-    """Upsert blank org_profile entries for the demo tenant."""
+async def seed_org_profile(
+    db: Any, tenant_id: str, profile_id: str, version_id: str = DEFAULT_VERSION_ID
+) -> None:
+    """Upsert blank per-clause org_profile entries for the demo tenant's demo profile."""
     for clause in CLAUSES:
         cid = clause["clause_id"]
         for field in _STATE_FIELDS:
             field_path = f"{cid}.{field['suffix']}"
             await db.org_profile.update_one(
-                {"tenant_id": tenant_id, "version_id": version_id, "field_path": field_path},
+                {
+                    "tenant_id": tenant_id,
+                    "profile_id": profile_id,
+                    "version_id": version_id,
+                    "field_path": field_path,
+                },
                 {"$setOnInsert": {
                     "tenant_id": tenant_id,
+                    "profile_id": profile_id,
                     "version_id": version_id,
                     "field_path": field_path,
                     "value": field["default"],
                 }},
                 upsert=True,
             )
-    logger.info("Org profile seeded for demo tenant", tenant_id=tenant_id, version_id=version_id)
+    logger.info("Org profile seeded for demo tenant", tenant_id=tenant_id, profile_id=profile_id, version_id=version_id)
+
+
+async def ensure_demo_org_profile(db: Any, tenant_id: str) -> str:
+    """Return the demo tenant's org profile id, creating a 'Demo Organisation'
+    profile if the tenant has none yet."""
+    existing = await db.org_profiles.find_one({"tenant_id": tenant_id})
+    if existing:
+        return str(existing["_id"])
+
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    result = await db.org_profiles.insert_one({
+        "tenant_id": tenant_id,
+        "org_name": "Demo Organisation",
+        "org_industry": None,
+        "org_size": None,
+        "org_location": None,
+        "description": None,
+        "created_at": now,
+        "updated_at": now,
+    })
+    return str(result.inserted_id)
 
 
 # ---------------------------------------------------------------------------
@@ -709,6 +740,8 @@ async def run_seed(demo_tenant_id: str) -> None:
     logger.info("Starting ISO knowledge seed", target_clauses=len(CLAUSES))
     await seed_clauses(db, DEFAULT_VERSION_ID)
     await seed_state_template(db, DEFAULT_VERSION_ID)
-    await seed_org_profile(db, demo_tenant_id, DEFAULT_VERSION_ID)
+    demo_profile_id = await ensure_demo_org_profile(db, demo_tenant_id)
+    await seed_org_profile(db, demo_tenant_id, demo_profile_id, DEFAULT_VERSION_ID)
     await ensure_iso_vector_index(db)
     logger.info("ISO knowledge seeding complete")
+

@@ -6,15 +6,18 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn)
   const [roles, setRoles] = useState([])
+  const [user, setUser] = useState(null)
 
   // Fetch server-side roles (includes ADMIN_EMAILS injection)
   const refreshRoles = useCallback(async () => {
-    if (!isLoggedIn()) { setRoles([]); return }
+    if (!isLoggedIn()) { setRoles([]); setUser(null); return }
     try {
       const me = await fetchMe()
       setRoles(me.roles ?? [])
+      setUser(me)
     } catch (_) {
       setRoles([])
+      setUser(null)
     }
   }, [])
 
@@ -30,12 +33,13 @@ export function AuthProvider({ children }) {
     apiLogout()
     setLoggedIn(false)
     setRoles([])
+    setUser(null)
   }, [])
 
   const isAdmin = roles.includes('admin')
 
   return (
-    <AuthContext.Provider value={{ loggedIn, login, logout, roles, isAdmin }}>
+    <AuthContext.Provider value={{ loggedIn, login, logout, roles, isAdmin, user, refreshUser: refreshRoles }}>
       {children}
     </AuthContext.Provider>
   )
@@ -44,3 +48,4 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext)
 }
+

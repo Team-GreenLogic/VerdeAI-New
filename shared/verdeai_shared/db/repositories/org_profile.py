@@ -1,4 +1,4 @@
-"""Org profile repository — per-tenant, per-version field values."""
+"""Org profile repository — per-tenant, per-profile, per-version clause field values."""
 
 from typing import Any
 
@@ -7,14 +7,31 @@ from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID
 
 
 class OrgProfileRepository(BaseRepository):
+    """Per-clause structured field values (the ``ClauseFieldsTab`` mechanism).
+
+    Not to be confused with :class:`OrgProfilesRepository`, which is the
+    registry of org profiles themselves (name/industry/size/location/description).
+    """
+
     collection_name = "org_profile"
 
-    def __init__(self, db: Any, tenant_id: str, version_id: str = DEFAULT_VERSION_ID) -> None:
+    def __init__(
+        self,
+        db: Any,
+        tenant_id: str,
+        profile_id: str,
+        version_id: str = DEFAULT_VERSION_ID,
+    ) -> None:
         super().__init__(db, tenant_id)
+        self._profile_id = profile_id
         self._version_id = version_id
 
     def _filter(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-        base: dict[str, Any] = {"tenant_id": self._tenant_id, "version_id": self._version_id}
+        base: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "profile_id": self._profile_id,
+            "version_id": self._version_id,
+        }
         if extra:
             base.update(extra)
         return base
@@ -42,3 +59,4 @@ class OrgProfileRepository(BaseRepository):
     async def upsert_many(self, fields: dict[str, Any]) -> None:
         for field_path, value in fields.items():
             await self.upsert(field_path, value)
+

@@ -1,19 +1,24 @@
-import { apiGet, apiPost, apiGetBlob } from './client.js'
+import { apiGet, apiPost, apiDelete, apiGetBlob } from './client.js'
 
 export async function getVersions() {
   return apiGet('/analyses/versions')
 }
 
-export async function createAnalysis(scope = 'full', versionId = 'iso-14001-2015') {
-  return apiPost('/analyses', { scope, version_id: versionId })
+export async function createAnalysis(profileId, scope = 'full', versionId = 'iso-14001-2015') {
+  return apiPost('/analyses', { profile_id: profileId, scope, version_id: versionId })
 }
 
-export async function listAnalyses() {
-  return apiGet('/analyses')
+export async function listAnalyses(profileId) {
+  const qs = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : ''
+  return apiGet(`/analyses${qs}`)
 }
 
 export async function getAnalysis(id) {
   return apiGet(`/analyses/${id}`)
+}
+
+export async function deleteAnalysis(id) {
+  return apiDelete(`/analyses/${id}`)
 }
 
 export async function pauseAnalysis(id) {
@@ -28,8 +33,12 @@ export async function getResults(id) {
   return apiGet(`/analyses/${id}/results`)
 }
 
-export async function getRecommendations(id) {
-  return apiGet(`/analyses/${id}/recommendations`)
+export async function getRecommendations(id, { sortBy, order } = {}) {
+  const params = new URLSearchParams()
+  if (sortBy) params.set('sort_by', sortBy)
+  if (order) params.set('order', order)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return apiGet(`/analyses/${id}/recommendations${qs}`)
 }
 
 export async function getMissingRequirements(id) {
@@ -47,3 +56,4 @@ export async function getStaleness(id) {
 export async function reanalyzeDelta(id) {
   return apiPost(`/analyses/${id}/reanalyze-delta`)
 }
+

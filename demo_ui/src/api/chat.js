@@ -1,22 +1,42 @@
-import { apiPost } from './client.js'
+import { apiDelete, apiGet, apiPost } from './client.js'
 
 const CHAT_URL = import.meta.env.VITE_CHAT_URL
 
-export async function createSession() {
-  return apiPost('/chat/session', {}, { chat: true })
+export async function createSession(profileId) {
+  return apiPost('/chat/session', { profile_id: profileId }, { chat: true })
+}
+
+export async function getChatContext(profileId) {
+  return apiGet(`/chat/context?profile_id=${encodeURIComponent(profileId)}`, { chat: true })
+}
+
+/** List this tenant's past chat sessions for a profile, most recently active first. */
+export async function listSessions(profileId) {
+  const qs = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : ''
+  return apiGet(`/chat/sessions${qs}`, { chat: true })
+}
+
+/** Full message history for one session, for resuming a past conversation. */
+export async function getSessionMessages(sessionId, profileId) {
+  return apiGet(`/chat/sessions/${sessionId}/messages?profile_id=${encodeURIComponent(profileId)}`, { chat: true })
+}
+
+export async function deleteSession(sessionId, profileId) {
+  return apiDelete(`/chat/sessions/${sessionId}?profile_id=${encodeURIComponent(profileId)}`, { chat: true })
 }
 
 /**
  * Stream a chat response via SSE (POST + fetch ReadableStream).
  * @param {string} question
  * @param {string|null} sessionId
+ * @param {string} profileId
  * @param {function} onToken  - called with each text token string
  * @param {function} onCitations - called with citations array
  * @param {function} onDone  - called when stream ends successfully
  * @param {function} onError - called with error message string
  * @returns {AbortController} - call .abort() to cancel
  */
-export function streamChat(question, sessionId, onToken, onCitations, onDone, onError) {
+export function streamChat(question, sessionId, profileId, onToken, onCitations, onDone, onError) {
   const controller = new AbortController()
   const token = localStorage.getItem('access_token')
 
@@ -31,7 +51,7 @@ export function streamChat(question, sessionId, onToken, onCitations, onDone, on
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ question, session_id: sessionId }),
+    body: JSON.stringify({ question, session_id: sessionId, profile_id: profileId }),
     signal: controller.signal,
   })
     .then(async (res) => {

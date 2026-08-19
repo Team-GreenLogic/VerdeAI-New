@@ -32,6 +32,7 @@ _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=Fals
 async def generate_recommendations(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     analysis_id: str,
     gap_result: dict[str, Any],
     version_id: str = DEFAULT_VERSION_ID,
@@ -67,7 +68,7 @@ async def generate_recommendations(
 
     # Load org_profile entries for this clause
     org_cursor = db.org_profile.find(
-        {"tenant_id": tenant_id, "field_path": {"$regex": f"^{clause_id}\\."}}
+        {"tenant_id": tenant_id, "profile_id": profile_id, "field_path": {"$regex": f"^{clause_id}\\."}}
     )
     org_entries = await org_cursor.to_list(None)
     org_profile_map = {e["field_path"]: e.get("value") for e in org_entries}
@@ -130,3 +131,4 @@ async def generate_recommendations(
     if tagged:
         await RecommendationStoreRepository(db, tenant_id).insert_many(analysis_id, tagged)
         logger.info("Persisted recommendations", clause_id=clause_id, count=len(tagged))
+

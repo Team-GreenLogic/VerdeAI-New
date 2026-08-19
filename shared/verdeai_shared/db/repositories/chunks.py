@@ -9,10 +9,15 @@ from verdeai_shared.db.repositories.base import BaseRepository
 class ChunksRepository(BaseRepository):
     collection_name = "chunks"
 
+    def __init__(self, db: Any, tenant_id: str, profile_id: str | None = None) -> None:
+        super().__init__(db, tenant_id)
+        self._profile_id = profile_id
+
     async def insert_many(self, chunks: list[dict[str, Any]]) -> list[str]:
         now = datetime.now(timezone.utc)
         for chunk in chunks:
             chunk.setdefault("tenant_id", self._tenant_id)
+            chunk.setdefault("profile_id", self._profile_id)
             chunk.setdefault("created_at", now)
             # New chunks are live by default; supersession flips this when a modified
             # version of the document is uploaded (see supersede_document).
@@ -49,3 +54,4 @@ class ChunksRepository(BaseRepository):
             },
         )
         return chunk_ids
+

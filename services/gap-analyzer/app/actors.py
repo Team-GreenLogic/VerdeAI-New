@@ -38,6 +38,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
         raise
 
     tenant_id = event.tenant_id
+    profile_id = event.profile_id
     analysis_id = event.analysis_id
     scope = event.scope
     version_id = event.version_id
@@ -97,7 +98,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
             parent_doc = await db.analyses.find_one({"analysis_id": event.parent_analysis_id})
             baseline_at = (parent_doc or {}).get("created_at")
         to_process_ids = await _prepare_delta(
-            db, tenant_id, analysis_id, event.parent_analysis_id, baseline_at, clauses
+            db, tenant_id, profile_id, analysis_id, event.parent_analysis_id, baseline_at, clauses
         )
         parent_results = await ResultStoreRepository(db, tenant_id).list_for_analysis(
             event.parent_analysis_id or ""
@@ -206,7 +207,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                         {"tenant_id": tenant_id, "analysis_id": analysis_id, "clause_id": clause_id}
                     )
 
-                result = await analyse_clause(db, tenant_id, analysis_id, clause,
+                result = await analyse_clause(db, tenant_id, profile_id, analysis_id, clause,
                                               on_thinking=on_thinking,
                                               redis_client=redis,
                                               prior_verdict=prior_verdicts.get(clause_id))
@@ -234,7 +235,7 @@ async def handle_analysis_requested(message: IncomingMessage) -> None:
                 # so only "Met" skips those.
                 if decision not in _RECOMMENDATION_SKIP_DECISIONS:
                     try:
-                        await generate_recommendations(db, tenant_id, analysis_id, result, version_id=version_id)
+                        await generate_recommendations(db, tenant_id, profile_id, analysis_id, result, version_id=version_id)
                     except Exception as exc:
                         logger.warning("Recommendation generation failed", clause_id=clause_id, error=str(exc))
                 if decision not in _MISSING_REQUEST_SKIP_DECISIONS:
@@ -415,6 +416,7 @@ _DELTA_CONTROL_KEYS = {"_id", "tenant_id", "analysis_id", "clause_id", "created_
 async def _prepare_delta(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     analysis_id: str,
     parent_analysis_id: str | None,
     baseline_at: datetime | None,
@@ -438,7 +440,7 @@ async def _prepare_delta(
         return {r["clause_id"] for r in existing_new if r.get("delta_pending")}
 
     parent_results = await result_repo.list_for_analysis(parent_analysis_id or "")
-    affected = await _compute_affected_clauses(db, tenant_id, baseline_at, clauses, parent_results)
+    affected = await _compute_affected_clauses(db, tenant_id, profile_id, baseline_at, clauses, parent_results)
 
     # Reset any downstream artefacts a crashed prior attempt may have inserted
     # (insert_many is not idempotent) so re-running the copy can't duplicate them.
@@ -474,6 +476,7 @@ async def _prepare_delta(
 async def _compute_affected_clauses(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     baseline_at: datetime | None,
     clauses: list[dict[str, Any]],
     parent_results: list[dict[str, Any]],
@@ -492,7 +495,12 @@ async def _compute_affected_clauses(
     if baseline_at is not None:
         removed_doc_ids = set(await db.chunks.distinct(
             "document_id",
-            {"tenant_id": tenant_id, "superseded": True, "superseded_at": {"$gt": baseline_at}},
+            {
+                "tenant_id": tenant_id,
+                "profile_id": profile_id,
+                "superseded": True,
+                "superseded_at": {"$gt": baseline_at},
+            },
         ))
         if removed_doc_ids:
             for cid, r in parent_by_clause.items():
@@ -509,7 +517,7 @@ async def _compute_affected_clauses(
             query_text = build_query_text(clause)
             vector = await embed_query(query_text)
             chunks = await hybrid_retrieve(
-                db, tenant_id, query_text, vector, created_after=baseline_at
+                db, tenant_id, profile_id, query_text, vector, created_after=baseline_at
             )
         except Exception as exc:
             logger.warning(
@@ -574,3 +582,4 @@ async def _publish_gaps_ready(event: AnalysisGapsReady) -> None:
         await channel.close()
     except Exception as exc:
         logger.warning("Failed to publish AnalysisGapsReady", error=str(exc))
+

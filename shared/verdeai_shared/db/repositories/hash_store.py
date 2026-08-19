@@ -9,6 +9,16 @@ from verdeai_shared.db.repositories.base import BaseRepository
 class HashStoreRepository(BaseRepository):
     collection_name = "hash_store"
 
+    def __init__(self, db: Any, tenant_id: str, profile_id: str) -> None:
+        super().__init__(db, tenant_id)
+        self._profile_id = profile_id
+
+    def _filter(self, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        base: dict[str, Any] = {"tenant_id": self._tenant_id, "profile_id": self._profile_id}
+        if extra:
+            base.update(extra)
+        return base
+
     async def find_by_sha256(self, sha256: str) -> dict[str, Any] | None:
         return await self._col.find_one(self._filter({"sha256": sha256}))
 
@@ -26,6 +36,7 @@ class HashStoreRepository(BaseRepository):
             {
                 "$set": {
                     "tenant_id": self._tenant_id,
+                    "profile_id": self._profile_id,
                     "sha256": sha256,
                     "document_id": document_id,
                     "phashes": phashes or [],
@@ -47,3 +58,4 @@ class HashStoreRepository(BaseRepository):
         if doc is None:
             return []
         return doc.get("fastcdc_chunks", [])  # type: ignore[return-value]
+

@@ -151,7 +151,14 @@ async def test_title_only_clause_never_reaches_analyse_clause(monkeypatch: pytes
 
     seen_clause_ids: list[str] = []
 
-    async def _fake_analyse_clause(db_: Any, _tenant: str, _aid: str, clause: dict[str, Any], **_k: Any) -> dict[str, Any]:
+    async def _fake_analyse_clause(
+        db_: Any,
+        _tenant: str,
+        _profile: str,
+        _aid: str,
+        clause: dict[str, Any],
+        **_k: Any,
+    ) -> dict[str, Any]:
         cid = clause["clause_id"]
         seen_clause_ids.append(cid)
         # Both real children satisfied — 6.2 should aggregate to Met. The real
@@ -168,7 +175,13 @@ async def test_title_only_clause_never_reaches_analyse_clause(monkeypatch: pytes
 
     monkeypatch.setattr(actors, "analyse_clause", _fake_analyse_clause)
 
-    event = AnalysisRequested(tenant_id=TENANT, analysis_id=ANALYSIS_ID, scope="full", version_id=VERSION_ID)
+    event = AnalysisRequested(
+        tenant_id=TENANT,
+        profile_id="profile-1",
+        analysis_id=ANALYSIS_ID,
+        scope="full",
+        version_id=VERSION_ID,
+    )
     await actors.handle_analysis_requested(_FakeMessage(event))  # type: ignore[arg-type]
 
     # The title-only parent must never be independently analysed.

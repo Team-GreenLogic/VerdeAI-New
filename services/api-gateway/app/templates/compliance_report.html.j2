@@ -216,8 +216,7 @@
     <tr><td class="k">Industry</td><td>{{ org.industry or "—" }}</td></tr>
     <tr><td class="k">Size</td><td>{{ org.size or "—" }}</td></tr>
     <tr><td class="k">Location</td><td>{{ org.location or "—" }}</td></tr>
-    {% if org.primary_activities %}<tr><td class="k">Primary activities</td><td>{{ org.primary_activities }}</td></tr>{% endif %}
-    {% if org.leadership_roles %}<tr><td class="k">Leadership</td><td>{{ org.leadership_roles }}</td></tr>{% endif %}
+    {% if org.description %}<tr><td class="k">Description</td><td>{{ org.description }}</td></tr>{% endif %}
   </table>
 
   <h3 class="sub">Scope &amp; Methodology</h3>
@@ -328,3 +327,4 @@
 
 </body>
 </html>
+

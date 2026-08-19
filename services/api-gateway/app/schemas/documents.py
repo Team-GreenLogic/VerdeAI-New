@@ -14,6 +14,7 @@ class DocumentUploadResponse(BaseModel):
 
 class DocumentItem(BaseModel):
     document_id: str
+    profile_id: str = ""
     filename: str
     status: str
     pages: int | None
@@ -33,3 +34,4 @@ class DocumentDeleteResponse(BaseModel):
 class WSTicketResponse(BaseModel):
     ticket: str
     expires_in: int
+
