@@ -387,50 +387,207 @@ function GapResultsTab({ analysisId, version }) {
 }
 
 // ── Recommendations Tab ──────────────────────────────────────────────────────
-function RecommendationsTab({ analysisId, version }) {
-  const [recs, setRecs] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getRecommendations(analysisId).then(r => { setRecs(r || []); setLoading(false) })
-  }, [analysisId, version])
-
-  if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
-  if (!recs.length) return <p className="text-sm text-slate-400 py-6">No recommendations yet. Run and complete an analysis first.</p>
-
-  const byClause = recs.reduce((acc, r) => {
-    ;(acc[r.clause_id] = acc[r.clause_id] || []).push(r); return acc
-  }, {})
-
+function RecommendationCard({ rec, rank, activeSort, showClauseBadge = false }) {
   function Stars({ n, max = 5, color = 'text-amber-400' }) {
+    const validN = Math.max(0, Math.min(max, Number(n) || 0))
     return (
-      <span className={color}>
-        {'★'.repeat(n)}{'☆'.repeat(max - n)}
+      <span className={`${color} font-mono tracking-tighter`} title={`${validN}/${max}`}>
+        {'★'.repeat(validN)}{'☆'.repeat(max - validN)}
       </span>
     )
   }
 
   return (
-    <div className="space-y-5">
-      {Object.entries(byClause).sort(([a], [b]) => compareClauseIds(a, b)).map(([clauseId, items]) => (
-        <div key={clauseId}>
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            Clause {clauseId}
-          </h4>
-          <div className="space-y-3">
-            {items.map((rec, i) => (
-              <div key={i} className="rounded-xl bg-white border border-slate-200 shadow-sm p-4">
-                <p className="text-sm text-slate-800 mb-3">{rec.text}</p>
-                <div className="flex flex-wrap gap-4 text-xs text-slate-500">
-                  <span>Cost: <Stars n={rec.cost} color="text-red-400" /></span>
-                  <span>Impact: <Stars n={rec.impact} color="text-brand-500" /></span>
-                  <span>Effort: <strong className="text-slate-700">{rec.effort_weeks}w</strong></span>
-                </div>
-              </div>
-            ))}
-          </div>
+    <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-4 hover:border-brand-300 hover:shadow-md transition-all duration-200 space-y-3 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+          {rank != null && (
+            <span className="font-mono text-xs font-bold text-slate-400 bg-slate-100 rounded-md px-1.5 py-0.5 flex-shrink-0 mt-0.5 dark:bg-slate-800 dark:text-slate-300">
+              #{rank}
+            </span>
+          )}
+          {showClauseBadge && (
+            <span className="font-mono text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200 rounded-md px-2 py-0.5 flex-shrink-0 mt-0.5 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200">
+              Clause {rec.clause_id}
+            </span>
+          )}
+          <p className="text-sm text-slate-800 leading-relaxed flex-1 dark:text-slate-200">{rec.text}</p>
         </div>
-      ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100 text-xs dark:border-slate-700">
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all ${
+          activeSort === 'impact'
+            ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-400 font-semibold shadow-xs dark:border-emerald-500 dark:bg-emerald-950/70 dark:text-emerald-100'
+            : 'bg-emerald-50 text-emerald-700 border border-emerald-200/70 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+        }`}>
+          <span className="text-[11px] uppercase tracking-wide">Impact</span>
+          <Stars n={rec.impact} color={activeSort === 'impact' ? 'text-emerald-600 dark:text-emerald-300' : 'text-emerald-500 dark:text-emerald-400'} />
+          <span className="text-[11px] font-bold">({rec.impact ?? 0}/5)</span>
+        </div>
+
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all ${
+          activeSort === 'cost'
+            ? 'bg-rose-100 text-rose-800 border-2 border-rose-400 font-semibold shadow-xs dark:border-rose-500 dark:bg-rose-950/70 dark:text-rose-100'
+            : 'bg-rose-50 text-rose-700 border border-rose-200/70 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200'
+        }`}>
+          <span className="text-[11px] uppercase tracking-wide">Cost</span>
+          <Stars n={rec.cost} color={activeSort === 'cost' ? 'text-rose-600 dark:text-rose-300' : 'text-rose-400'} />
+          <span className="text-[11px] font-bold">({rec.cost ?? 0}/5)</span>
+        </div>
+
+        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all ${
+          activeSort === 'effort'
+            ? 'bg-indigo-100 text-indigo-800 border-2 border-indigo-400 font-semibold shadow-xs dark:border-indigo-500 dark:bg-indigo-950/70 dark:text-indigo-100'
+            : 'bg-indigo-50 text-indigo-700 border border-indigo-200/70 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200'
+        }`}>
+          <span className="text-[11px] uppercase tracking-wide">Effort</span>
+          <strong className="text-slate-800 font-mono text-[12px] dark:text-slate-100">{rec.effort_weeks ?? 0}w</strong>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400">({(rec.effort_weeks ?? 0) * 5}d)</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RecommendationsTab({ analysisId, version }) {
+  const [recs, setRecs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [sortBy, setSortBy] = useState('clause')
+  const [sortOrder, setSortOrder] = useState('asc')
+
+  useEffect(() => {
+    getRecommendations(analysisId).then(r => { setRecs(r || []); setLoading(false) })
+  }, [analysisId, version])
+
+  function handleSortChange(newSort) {
+    if (sortBy === newSort) {
+      setSortOrder(previous => previous === 'asc' ? 'desc' : 'asc')
+      return
+    }
+
+    setSortBy(newSort)
+    setSortOrder(newSort === 'impact' ? 'desc' : 'asc')
+  }
+
+  const sortedRecs = useMemo(() => {
+    const direction = sortOrder === 'asc' ? 1 : -1
+    return [...recs].sort((a, b) => {
+      const metric = sortBy === 'effort' ? 'effort_weeks' : sortBy
+      if (metric !== 'clause') {
+        const difference = ((a[metric] ?? 0) - (b[metric] ?? 0)) * direction
+        if (difference !== 0) return difference
+      }
+      return compareClauseIds(a.clause_id, b.clause_id) * (metric === 'clause' ? direction : 1)
+    })
+  }, [recs, sortBy, sortOrder])
+
+  if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+  if (!recs.length) return <p className="text-sm text-slate-400 py-6">No recommendations yet. Run and complete an analysis first.</p>
+
+  const isGrouped = sortBy === 'clause'
+  const byClause = sortedRecs.reduce((acc, recommendation) => {
+    ;(acc[recommendation.clause_id] = acc[recommendation.clause_id] || []).push(recommendation)
+    return acc
+  }, {})
+  const sortedClauseKeys = Object.keys(byClause).sort(
+    (a, b) => compareClauseIds(a, b) * (sortOrder === 'asc' ? 1 : -1),
+  )
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 dark:border-slate-700 dark:bg-slate-900/70">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 dark:text-slate-300">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+              Sort by:
+            </span>
+
+            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs dark:border-slate-700 dark:bg-slate-950">
+              {[
+                { key: 'clause', label: 'Clause' },
+                { key: 'impact', label: 'Impact' },
+                { key: 'cost', label: 'Cost' },
+                { key: 'effort', label: 'Effort' },
+              ].map(option => {
+                const isActive = sortBy === option.key
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => handleSortChange(option.key)}
+                    aria-pressed={isActive}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isActive
+                        ? 'bg-brand-600 text-white shadow-xs dark:bg-emerald-700'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    {option.label}
+                    {isActive && (
+                      <span className="text-[10px] opacity-90 font-mono" aria-hidden="true">
+                        {sortOrder === 'asc' ? '▲' : '▼'}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSortOrder(previous => previous === 'asc' ? 'desc' : 'asc')}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors shadow-xs cursor-pointer dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Toggle sort direction"
+          >
+            <span>Order:</span>
+            <strong className="text-slate-800 dark:text-slate-100">
+              {sortBy === 'clause'
+                ? (sortOrder === 'asc' ? 'Clause (4.1 → 10.3)' : 'Clause (10.3 → 4.1)')
+                : (sortOrder === 'desc' ? 'Highest First (High → Low)' : 'Lowest First (Low → High)')}
+            </strong>
+            <span className="text-slate-400 font-mono" aria-hidden="true">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+          </button>
+        </div>
+      </div>
+
+      {isGrouped ? (
+        <div className="space-y-6">
+          {sortedClauseKeys.map(clauseId => (
+            <div key={clauseId} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200 rounded-md px-2 py-0.5 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200">
+                  Clause {clauseId}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {byClause[clauseId].length} recommendation{byClause[clauseId].length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {byClause[clauseId].map((recommendation, index) => (
+                  <RecommendationCard key={index} rec={recommendation} activeSort={sortBy} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sortedRecs.map((recommendation, index) => (
+            <RecommendationCard
+              key={index}
+              rec={recommendation}
+              rank={index + 1}
+              activeSort={sortBy}
+              showClauseBadge
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
