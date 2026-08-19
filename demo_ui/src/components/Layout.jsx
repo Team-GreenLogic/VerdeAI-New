@@ -98,8 +98,12 @@ export default function Layout({ children }) {
           <div className="bg-blob bg-blob-1" />
           <div className="bg-blob bg-blob-2" />
           <div className="bg-blob bg-blob-3" />
-          {/* Content above blobs */}
-          <div className="relative z-10">
+          {/* Content above blobs — h-full so pages that manage their own internal
+              scroll region (e.g. Chat) get a real bounded height to work with;
+              otherwise `h-full` on a page's root div has nothing definite to
+              resolve against, and this <main> ends up being what scrolls instead
+              of the page's own internal scroll area. */}
+          <div className="relative z-10 h-full">
             {children}
           </div>
         </main>

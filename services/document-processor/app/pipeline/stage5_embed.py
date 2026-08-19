@@ -55,38 +55,63 @@ async def run(tenant_id: str, profile_id: str, document_id: str) -> int:
     return len(chunks)
 
 
+def _desired_vector_index_definition() -> dict:
+    return {
+        "fields": [
+            {
+                "type": "vector",
+                "path": "embedding",
+                "numDimensions": settings.EMBEDDING_DIMENSIONS,
+                "similarity": "cosine",
+            },
+            {"type": "filter", "path": "tenant_id"},
+            {"type": "filter", "path": "profile_id"},
+            {"type": "filter", "path": "document_id"},
+            {"type": "filter", "path": "content_type"},
+            {"type": "filter", "path": "superseded"},
+            {"type": "filter", "path": "created_at"},
+        ]
+    }
+
+
 async def _ensure_vector_index(db: object) -> None:
-    """Create chunks_vector_idx if it doesn't already exist."""
+    """Create chunks_vector_idx if missing, or update it in place if its filter
+    fields have fallen behind the desired definition (e.g. a new filter field —
+    such as ``profile_id`` — was added to this function after the index already
+    existed in a live deployment; merely checking the index *name* would never
+    pick that up, silently leaving queries that filter on the new field broken)."""
     index_name = settings.VECTOR_INDEX_NAME
+    definition = _desired_vector_index_definition()
+    desired_paths = {f["path"] for f in definition["fields"]}
     try:
         existing = await db.chunks.list_search_indexes().to_list(length=None)  # type: ignore[union-attr]
-        names = [idx.get("name") for idx in existing]
-        if index_name in names:
+        existing_by_name = {idx.get("name"): idx for idx in existing}
+        current = existing_by_name.get(index_name)
+
+        if current is None:
+            await db.chunks.create_search_index(  # type: ignore[union-attr]
+                {"name": index_name, "type": "vectorSearch", "definition": definition}
+            )
+            logger.info("Created vector search index", index=index_name)
             return
 
-        await db.chunks.create_search_index(  # type: ignore[union-attr]
-            {
-                "name": index_name,
-                "type": "vectorSearch",
-                "definition": {
-                    "fields": [
-                        {
-                            "type": "vector",
-                            "path": "embedding",
-                            "numDimensions": settings.EMBEDDING_DIMENSIONS,
-                            "similarity": "cosine",
-                        },
-                        {"type": "filter", "path": "tenant_id"},
-                        {"type": "filter", "path": "profile_id"},
-                        {"type": "filter", "path": "document_id"},
-                        {"type": "filter", "path": "content_type"},
-                        {"type": "filter", "path": "superseded"},
-                        {"type": "filter", "path": "created_at"},
-                    ]
-                },
-            }
-        )
-        logger.info("Created vector search index", index=index_name)
+        current_paths = {
+            f.get("path") for f in current.get("latestDefinition", {}).get("fields", [])
+        }
+        if not desired_paths.issubset(current_paths):
+            # update_search_index rejects vectorSearch-type definitions on at
+            # least the mongodb-atlas-local emulator ("mappings" is required,
+            # a classic-Search-type requirement) — drop and recreate instead,
+            # which works uniformly on both real Atlas and the local emulator.
+            await db.chunks.drop_search_index(index_name)  # type: ignore[union-attr]
+            await db.chunks.create_search_index(  # type: ignore[union-attr]
+                {"name": index_name, "type": "vectorSearch", "definition": definition}
+            )
+            logger.info(
+                "Recreated vector search index with new filter fields",
+                index=index_name,
+                added=sorted(desired_paths - current_paths),
+            )
     except Exception as exc:
-        # Index creation is async in Atlas — log but don't fail
-        logger.warning("Vector index check/create skipped", error=str(exc))
+        # Index creation/update is async in Atlas — log but don't fail
+        logger.warning("Vector index check/create/update skipped", error=str(exc))

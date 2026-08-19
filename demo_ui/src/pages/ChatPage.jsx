@@ -46,26 +46,34 @@ const TrashSVG = () => (
 function CitationPanel({ citation, onClose }) {
   if (!citation) return null
   return (
-    <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-slate-200 shadow-2xl z-40 flex flex-col animate-slide-in-right">
-      <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
-        <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-          <DocSVG />
-          Document Reference
-        </h3>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors"
-        >
-          <CloseSVG />
-        </button>
-      </div>
-      <div className="p-5 overflow-y-auto scrollbar-thin">
-        <div className="mb-4">
-          <p className="font-semibold text-brand-700 text-sm">{citation.filename}</p>
-          <p className="text-xs text-slate-500 mt-1">Page {citation.page}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg max-h-[80vh] rounded-xl bg-white shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
+          <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+            <DocSVG />
+            Document Reference
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors"
+          >
+            <CloseSVG />
+          </button>
         </div>
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
-          <MarkdownContent content={citation.text || 'No excerpt available.'} />
+        <div className="p-5 overflow-y-auto scrollbar-thin">
+          <div className="mb-4">
+            <p className="font-semibold text-brand-700 text-sm">{citation.filename}</p>
+            <p className="text-xs text-slate-500 mt-1">Page {citation.page}</p>
+          </div>
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
+            <MarkdownContent content={citation.text || 'No excerpt available.'} />
+          </div>
         </div>
       </div>
     </div>
@@ -152,7 +160,7 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
             </span>
           ) : role === 'assistant' ? (
             <div className="text-sm leading-relaxed text-slate-800 space-y-1">
-              <MarkdownContent content={content} />
+              <MarkdownContent content={content} citations={citations} onCitationClick={onCitationClick} />
               {streaming && (
                 <span className="inline-block w-0.5 h-4 bg-slate-400 ml-0.5 align-middle animate-pulse rounded" />
               )}
@@ -230,6 +238,10 @@ export default function ChatPage() {
   const abortRef = useRef(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const messagesContainerRef = useRef(null)
+  // Tracks whether the user is (still) scrolled near the bottom — a ref rather
+  // than state so scrolling itself doesn't trigger a re-render/effect re-run.
+  const stickToBottomRef = useRef(true)
 
   // Persist messages to sessionStorage whenever they change
   useEffect(() => {
@@ -275,9 +287,20 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId])
 
+  // Only auto-follow the stream if the user hasn't scrolled away from the
+  // bottom — otherwise every streamed token would yank their view back down.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (stickToBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages])
+
+  function handleMessagesScroll() {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottomRef.current = distanceFromBottom < 80
+  }
 
   function selectProfile(pid) {
     if (!pid) return
@@ -501,7 +524,11 @@ export default function ChatPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-5 scrollbar-thin flex flex-col">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 overflow-y-auto py-5 scrollbar-thin flex flex-col"
+      >
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-5">
             <div className="text-slate-300">
