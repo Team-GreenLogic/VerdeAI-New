@@ -10,6 +10,7 @@ import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
 import MarkdownContent from '../components/MarkdownContent.jsx'
 import StalenessBanner from '../components/StalenessBanner.jsx'
+import ModalPortal from '../components/ModalPortal.jsx'
 
 const ACTIVE = ['pending', 'running', 'paused']
 const DONE   = ['complete', 'failed']
@@ -52,35 +53,33 @@ function CitationModal({ citation, onClose }) {
     ? (citation.field_path || 'Organisation Profile')
     : (citation.filename || 'Document Reference')
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
-      onClick={onClose}
+    <ModalPortal
+      onClose={onClose}
+      labelledBy="analysis-citation-title"
+      panelClassName="flex max-h-[80dvh] min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
     >
-      <div
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col animate-fade-in-up"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
           <div className="min-w-0">
-            <p className="font-semibold text-slate-800 text-sm truncate">{title}</p>
+            <p id="analysis-citation-title" className="font-semibold text-slate-800 text-sm truncate">{title}</p>
             {citation.type !== 'org_profile' && citation.page != null && (
               <p className="text-xs text-slate-500 mt-0.5">Page {citation.page}</p>
             )}
           </div>
           <button
+            data-autofocus
             onClick={onClose}
+            aria-label="Close citation"
             className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors flex-shrink-0"
           >
             <CloseSVG />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto">
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
-            <MarkdownContent content={citation.text || 'No excerpt available.'} />
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-5">
+          <div className="min-w-0 overflow-hidden bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+            <MarkdownContent className="break-words" content={citation.text || 'No excerpt available.'} />
           </div>
         </div>
-      </div>
-    </div>
+    </ModalPortal>
   )
 }
 

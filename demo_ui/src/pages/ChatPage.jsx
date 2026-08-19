@@ -4,6 +4,7 @@ import { createSession, deleteSession, getChatContext, getSessionMessages, listS
 import { listProfiles } from '../api/orgProfiles.js'
 import Spinner from '../components/Spinner.jsx'
 import MarkdownContent from '../components/MarkdownContent.jsx'
+import ModalPortal from '../components/ModalPortal.jsx'
 
 const LAST_PROFILE_KEY = 'verdeai_last_chat_profile_id'
 const COLOMBO_DATE_TIME = new Intl.DateTimeFormat('en-LK', {
@@ -13,11 +14,19 @@ const COLOMBO_DATE_TIME = new Intl.DateTimeFormat('en-LK', {
   day: '2-digit',
   hour: '2-digit',
   minute: '2-digit',
+  hourCycle: 'h23',
+  timeZoneName: 'short',
 })
 
 function formatColomboDateTime(value) {
   if (!value) return 'Time unavailable'
-  const date = new Date(value)
+  const raw = String(value)
+  // Older API responses contain Mongo's naive UTC ISO value. Explicitly add
+  // the UTC designator before converting to Sri Lanka time.
+  const timestamp = /^\d{4}-\d{2}-\d{2}T/.test(raw) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)
+    ? `${raw}Z`
+    : raw
+  const date = new Date(timestamp)
   return Number.isNaN(date.getTime()) ? 'Time unavailable' : COLOMBO_DATE_TIME.format(date)
 }
 
@@ -64,15 +73,7 @@ function citationLabel(citation) {
 }
 
 function CitationPanel({ citation, profileId, onClose }) {
-  const closeRef = useRef(null)
   const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!citation) return
-    closeRef.current?.focus()
-    const closeOnEscape = (event) => event.key === 'Escape' && onClose()
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [citation, onClose])
   if (!citation) return null
   const isAnalysis = citation.type === 'analysis'
   const copyExcerpt = async () => {
@@ -81,25 +82,18 @@ function CitationPanel({ citation, profileId, onClose }) {
     window.setTimeout(() => setCopied(false), 1500)
   }
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
-      onClick={onClose}
-      role="presentation"
+    <ModalPortal
+      onClose={onClose}
+      labelledBy="citation-title"
+      panelClassName="flex max-h-[85dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
     >
-      <div
-        className="flex max-h-[85dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
-        onClick={e => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="citation-title"
-      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
           <h3 id="citation-title" className="font-semibold text-slate-900 text-sm flex items-center gap-2">
             <DocSVG />
             {isAnalysis ? 'Gap Analysis Reference' : 'Document Reference'}
           </h3>
           <button
-            ref={closeRef}
+            data-autofocus
             onClick={onClose}
             aria-label="Close citation"
             className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200 p-1.5 rounded-full transition-colors"
@@ -130,8 +124,7 @@ function CitationPanel({ citation, profileId, onClose }) {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </ModalPortal>
   )
 }
 

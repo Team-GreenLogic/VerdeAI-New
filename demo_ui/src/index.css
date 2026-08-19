@@ -8,10 +8,6 @@
     min-height: 100%;
   }
 
-  html {
-    scrollbar-gutter: stable;
-  }
-
   body {
     @apply bg-gray-50 text-slate-900 antialiased;
     font-family: 'Inter', sans-serif;

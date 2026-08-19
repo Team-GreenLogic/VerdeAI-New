@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -21,6 +22,15 @@ from app.pipeline.history import append_turn, load_history
 from app.pipeline.rag import load_chat_context, rag_stream
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _utc_iso(value: datetime) -> str:
+    """Serialize Mongo datetimes unambiguously; Motor may return naive UTC."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
 
 
 class ChatRequest(BaseModel):
@@ -105,7 +115,7 @@ async def list_sessions(
             session_id=r["session_id"],
             profile_id=r.get("profile_id"),
             title=(r.get("title") or "")[:80],
-            last_message_at=r["last_message_at"].isoformat(),
+            last_message_at=_utc_iso(r["last_message_at"]),
             message_count=r["message_count"],
         )
         for r in rows
@@ -122,7 +132,7 @@ async def get_session_messages(session_id: str, principal: CurrentPrincipal) -> 
             role=r["role"],
             content=r["content"],
             citations=r.get("citations", []),
-            created_at=r["created_at"].isoformat(),
+            created_at=_utc_iso(r["created_at"]),
         )
         for r in rows
     ]
