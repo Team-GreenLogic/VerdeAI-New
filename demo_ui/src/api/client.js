@@ -86,3 +86,19 @@ export async function apiPostForm(path, formData) {
   })
   return handleResponse(res)
 }
+
+export async function apiGetBlob(path) {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: authHeaders(),
+  })
+  if (res.status === 401) {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`)
+  }
+  return res.blob()
+}
