@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { listAnalyses, createAnalysis, deleteAnalysis, getVersions, getStaleness, reanalyzeDelta } from '../api/analyses.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
@@ -20,6 +20,7 @@ const StartSVG = () => (
 )
 
 export default function AnalysisListPage() {
+  const { profileId } = useParams()
   const [analyses, setAnalyses] = useState([])
   const [versions, setVersions] = useState([])
   const [selectedVersion, setSelectedVersion] = useState(DEFAULT_VERSION_ID)
@@ -32,7 +33,7 @@ export default function AnalysisListPage() {
 
   async function refresh() {
     const [data, vdata] = await Promise.all([
-      listAnalyses().catch(() => []),
+      listAnalyses(profileId).catch(() => []),
       getVersions().catch(() => []),
     ])
     setAnalyses(data || [])
@@ -62,7 +63,7 @@ export default function AnalysisListPage() {
 
   useEffect(() => {
     refresh().finally(() => setLoading(false))
-  }, [])
+  }, [profileId])
 
   const activeStatuses = ['pending', 'running']
   const hasActive = analyses.some(a => activeStatuses.includes(a.status))
@@ -83,7 +84,7 @@ export default function AnalysisListPage() {
     setReanalyzing(true)
     try {
       const res = await reanalyzeDelta(latest.analysis_id)
-      navigate(`/analyses/${res.analysis_id}`)
+      navigate(`/analyses/${profileId}/${res.analysis_id}`)
     } catch (err) {
       alert(err.message)
       setReanalyzing(false)
@@ -93,8 +94,8 @@ export default function AnalysisListPage() {
   async function handleStart() {
     setStarting(true)
     try {
-      const res = await createAnalysis('full', selectedVersion)
-      navigate(`/analyses/${res.analysis_id}`)
+      const res = await createAnalysis(profileId, 'full', selectedVersion)
+      navigate(`/analyses/${profileId}/${res.analysis_id}`)
     } catch (err) {
       alert(err.message)
     } finally {
@@ -106,6 +107,9 @@ export default function AnalysisListPage() {
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Header */}
       <div className="rounded-xl bg-white border border-slate-200 border-l-4 border-l-brand-500 shadow-sm p-5">
+        <button onClick={() => navigate('/analyses')} className="text-xs text-slate-400 hover:text-brand-600 mb-1 transition-colors">
+          ← Analyses
+        </button>
         <h1 className="text-xl font-bold text-slate-900">Gap Analysis</h1>
         <p className="text-sm text-slate-500 mt-0.5">Run ISO 14001 compliance gap analyses against your uploaded documents.</p>
       </div>
@@ -289,7 +293,7 @@ export default function AnalysisListPage() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
-                        to={`/analyses/${a.analysis_id}`}
+                        to={`/analyses/${profileId}/${a.analysis_id}`}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-md px-2.5 py-1.5 transition-colors"
                       >
                         View →

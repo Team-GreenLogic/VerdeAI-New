@@ -15,11 +15,13 @@ class ChatHistoryRepository(BaseRepository):
         role: str,
         content: str,
         citations: list[dict[str, Any]] | None = None,
+        profile_id: str | None = None,
     ) -> str:
         now = datetime.now(timezone.utc)
         doc: dict[str, Any] = {
             "tenant_id": self._tenant_id,
             "session_id": session_id,
+            "profile_id": profile_id,
             "role": role,
             "content": content,
             "citations": citations or [],
@@ -45,14 +47,16 @@ class ChatHistoryRepository(BaseRepository):
         )
         return await cursor.to_list(length=None)
 
-    async def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
+    async def list_sessions(self, limit: int = 50, profile_id: str | None = None) -> list[dict[str, Any]]:
         """One row per session for this tenant: title (first message), last activity, message count."""
+        match = self._filter({"profile_id": profile_id}) if profile_id else self._filter()
         pipeline = [
-            {"$match": self._filter()},
+            {"$match": match},
             {"$sort": {"created_at": 1}},
             {
                 "$group": {
                     "_id": "$session_id",
+                    "profile_id": {"$first": "$profile_id"},
                     "title": {"$first": "$content"},
                     "last_message_at": {"$last": "$created_at"},
                     "message_count": {"$sum": 1},
@@ -64,6 +68,7 @@ class ChatHistoryRepository(BaseRepository):
                 "$project": {
                     "_id": 0,
                     "session_id": "$_id",
+                    "profile_id": 1,
                     "title": 1,
                     "last_message_at": 1,
                     "message_count": 1,

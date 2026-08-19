@@ -1,4 +1,4 @@
-"""BM25 per-tenant index — backed by bm25s, serialised in MongoDB."""
+"""BM25 per-(tenant, org profile) index — backed by bm25s, serialised in MongoDB."""
 
 import asyncio
 import pickle
@@ -12,12 +12,13 @@ from verdeai_shared.settings import settings
 async def bm25_search(
     db: Any,  # AsyncIOMotorDatabase
     tenant_id: str,
+    profile_id: str,
     query: str,
     top_k: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Run BM25 retrieval for the given tenant. Returns list of {chunk_id, score}."""
+    """Run BM25 retrieval for the given tenant + org profile. Returns list of {chunk_id, score}."""
     k = top_k or settings.RETRIEVAL_TOP_K
-    record = await db["bm25_indexes"].find_one({"tenant_id": tenant_id})
+    record = await db["bm25_indexes"].find_one({"tenant_id": tenant_id, "profile_id": profile_id})
     if record is None or not record.get("serialized"):
         return []
 
@@ -37,10 +38,12 @@ async def bm25_search(
 async def remove_document_from_bm25_index(
     db: Any,  # AsyncIOMotorDatabase
     tenant_id: str,
+    profile_id: str,
     chunk_ids_to_remove: list[str],
 ) -> None:
-    """Remove specific chunk IDs from the tenant BM25 index and rebuild."""
-    record = await db["bm25_indexes"].find_one({"tenant_id": tenant_id})
+    """Remove specific chunk IDs from the (tenant, profile) BM25 index and rebuild."""
+    key = {"tenant_id": tenant_id, "profile_id": profile_id}
+    record = await db["bm25_indexes"].find_one(key)
     if not record or not record.get("serialized"):
         return
 
@@ -55,14 +58,14 @@ async def remove_document_from_bm25_index(
     ]
 
     if not kept:
-        await db["bm25_indexes"].delete_one({"tenant_id": tenant_id})
+        await db["bm25_indexes"].delete_one(key)
         return
 
     new_ids, new_texts = zip(*kept)
     serialized = await asyncio.to_thread(_build_and_serialize_index, list(new_texts))
 
     await db["bm25_indexes"].update_one(
-        {"tenant_id": tenant_id},
+        key,
         {
             "$set": {
                 "serialized": serialized,
@@ -77,11 +80,13 @@ async def remove_document_from_bm25_index(
 async def update_bm25_index(
     db: Any,  # AsyncIOMotorDatabase
     tenant_id: str,
+    profile_id: str,
     new_texts: list[str],
     new_chunk_ids: list[str],
 ) -> None:
-    """Rebuild or extend the BM25 index for a tenant."""
-    record = await db["bm25_indexes"].find_one({"tenant_id": tenant_id})
+    """Rebuild or extend the BM25 index for a (tenant, org profile) pair."""
+    key = {"tenant_id": tenant_id, "profile_id": profile_id}
+    record = await db["bm25_indexes"].find_one(key)
     existing_texts: list[str] = []
     existing_ids: list[str] = []
 
@@ -95,10 +100,11 @@ async def update_bm25_index(
     serialized = await asyncio.to_thread(_build_and_serialize_index, all_texts)
 
     await db["bm25_indexes"].update_one(
-        {"tenant_id": tenant_id},
+        key,
         {
             "$set": {
                 "tenant_id": tenant_id,
+                "profile_id": profile_id,
                 "serialized": serialized,
                 "chunk_ids": all_ids,
                 "texts": all_texts,

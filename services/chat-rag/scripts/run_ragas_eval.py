@@ -92,6 +92,7 @@ async def _get_db():
 async def _run_pipeline_on_question(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     question: str,
 ) -> dict[str, Any]:
     """Execute the retrieval + generation pipeline for a single question.
@@ -114,7 +115,7 @@ async def _run_pipeline_on_question(
     chunks: list[dict[str, Any]] = []
     if query_vector:
         try:
-            chunks = await hybrid_retrieve(db, tenant_id, question, query_vector)
+            chunks = await hybrid_retrieve(db, tenant_id, profile_id, question, query_vector)
         except Exception as exc:
             logger.warning("Retrieval failed for eval question", error=str(exc))
 
@@ -285,13 +286,23 @@ async def main(
     db = await _get_db()
     logger.info("Connected to MongoDB for evaluation")
 
+    # Retrieval is now isolated per org profile — resolve the eval tenant's first
+    # (usually only) profile so this script keeps working against a seeded eval DB
+    # without needing its own dataset/CLI schema change.
+    from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
+
+    profiles = await OrgProfilesRepository(db, tenant_id).list_all()
+    profile_id = str(profiles[0]["_id"]) if profiles else ""
+    if not profile_id:
+        logger.warning("No org profile found for eval tenant — retrieval will return no chunks", tenant_id=tenant_id)
+
     # Run pipeline on each question
     results: list[dict[str, Any]] = []
     ground_truths: list[str] = []
 
     for i, item in enumerate(test_data):
         logger.info(f"[{i+1}/{len(test_data)}] Evaluating: {item['question'][:80]}...")
-        result = await _run_pipeline_on_question(db, tenant_id, item["question"])
+        result = await _run_pipeline_on_question(db, tenant_id, profile_id, item["question"])
         results.append(result)
         ground_truths.append(item["ground_truth"])
 

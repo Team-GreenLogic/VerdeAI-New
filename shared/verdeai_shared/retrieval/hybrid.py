@@ -17,6 +17,7 @@ def _rrf_score(rank: int, k: int = 60) -> float:
 async def hybrid_retrieve(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     query: str,
     query_vector: list[float],
     top_k: int | None = None,
@@ -25,6 +26,9 @@ async def hybrid_retrieve(
     """Run vector + BM25 retrieval and fuse with RRF, then rerank.
 
     Returns up to RERANK_TOP_K chunks sorted by rerank score.
+
+    Evidence is isolated to ``profile_id``: a gap-analysis or chat run for one
+    org profile must never surface another profile's documents.
 
     When ``created_after`` is set, only chunks ingested after that instant survive
     (delta re-analysis "new evidence only"). Superseded chunks are excluded
@@ -35,7 +39,7 @@ async def hybrid_retrieve(
 
     # Parallel retrieval
     vector_results, bm25_results = await _run_both(
-        db, tenant_id, query, query_vector, k, created_after
+        db, tenant_id, profile_id, query, query_vector, k, created_after
     )
 
     # Build RRF score map: {chunk_id: rrf_score}
@@ -65,6 +69,7 @@ async def hybrid_retrieve(
         db_filter: dict[str, Any] = {
             "_id": {"$in": [ObjectId(i) for i in missing_ids]},
             "superseded": {"$ne": True},
+            "profile_id": profile_id,
         }
         if created_after is not None:
             db_filter["created_at"] = {"$gt": created_after}
@@ -94,6 +99,7 @@ async def hybrid_retrieve(
 async def _run_both(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     query: str,
     query_vector: list[float],
     k: int,
@@ -102,8 +108,10 @@ async def _run_both(
     """Run vector and BM25 retrieval concurrently."""
     import asyncio
     vector_task = asyncio.create_task(
-        vector_search_chunks(db, tenant_id, query_vector, k, created_after=created_after)
+        vector_search_chunks(
+            db, tenant_id, query_vector, k, created_after=created_after, profile_id=profile_id
+        )
     )
-    bm25_task = asyncio.create_task(bm25_search(db, tenant_id, query, k))
+    bm25_task = asyncio.create_task(bm25_search(db, tenant_id, profile_id, query, k))
     vector_results, bm25_results = await asyncio.gather(vector_task, bm25_task)
     return vector_results, bm25_results

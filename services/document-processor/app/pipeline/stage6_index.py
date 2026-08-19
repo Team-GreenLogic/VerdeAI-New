@@ -12,13 +12,13 @@ from verdeai_shared.retrieval.bm25 import update_bm25_index
 from app.progress import emit
 
 
-async def run(tenant_id: str, document_id: str) -> None:
+async def run(tenant_id: str, profile_id: str, document_id: str) -> None:
     """Update the BM25 index with this document's chunks."""
     db = get_database()
 
     await emit(tenant_id, document_id, "index", "running", "Updating BM25 index")
 
-    chunks_repo = ChunksRepository(db, tenant_id)
+    chunks_repo = ChunksRepository(db, tenant_id, profile_id)
     chunks = await chunks_repo.find_by_document(document_id)
 
     if not chunks:
@@ -28,7 +28,7 @@ async def run(tenant_id: str, document_id: str) -> None:
     texts = [c.get("text", "") for c in chunks]
     chunk_ids = [str(c["_id"]) for c in chunks]
 
-    await update_bm25_index(db, tenant_id, texts, chunk_ids)
+    await update_bm25_index(db, tenant_id, profile_id, texts, chunk_ids)
 
     logger.info(
         "BM25 index updated",

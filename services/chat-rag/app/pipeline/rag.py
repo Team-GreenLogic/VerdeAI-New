@@ -28,15 +28,7 @@ except ImportError:
 _PROMPTS_DIR = Path(_vs_pkg.__file__).parent / "llm" / "prompts"
 _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=False)
 
-# Org profile top-level field paths
-_ORG_FIELDS = {
-    "org_name": "org.name",
-    "org_industry": "org.industry",
-    "org_size": "org.size",
-    "org_location": "org.location",
-    "primary_activities": "org.primary_activities",
-    "leadership_roles": "org.leadership_roles",
-}
+_ORG_CONTEXT_KEYS = ("org_name", "org_industry", "org_size", "org_location", "description")
 
 
 # ── Tracked wrappers for granular Langfuse tracing ──────────────────
@@ -48,10 +40,10 @@ async def _tracked_embed_query(text: str) -> list[float]:
 
 @observe(name="hybrid_retrieve")  # type: ignore[misc]
 async def _tracked_hybrid_retrieve(
-    db: Any, tenant_id: str, question: str, query_vector: list[float]
+    db: Any, tenant_id: str, profile_id: str, question: str, query_vector: list[float]
 ) -> list[dict[str, Any]]:
     """Traced wrapper around hybrid retrieval (vector + BM25 + rerank)."""
-    return await hybrid_retrieve(db, tenant_id, question, query_vector)
+    return await hybrid_retrieve(db, tenant_id, profile_id, question, query_vector)
 
 
 async def _enrich_chunks_with_filenames(
@@ -106,28 +98,24 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> tuple[str, list[d
 
 
 @observe(name="load_org_context")  # type: ignore[misc]
-async def _load_org_context(db: Any, tenant_id: str) -> dict[str, str]:
-    """Load org profile top-level fields for system prompt."""
-    ctx: dict[str, str] = {k: "Not specified" for k in _ORG_FIELDS}
-    for var, field_path in _ORG_FIELDS.items():
-        doc = await db.org_profile.find_one(
-            {"tenant_id": tenant_id, "field_path": field_path}
-        )
-        if doc and doc.get("value"):
-            ctx[var] = str(doc["value"])
-    return ctx
+async def _load_org_context(db: Any, tenant_id: str, profile_id: str) -> dict[str, str]:
+    """Load the selected org profile's fields for the system prompt."""
+    from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
+
+    profile = await OrgProfilesRepository(db, tenant_id).get(profile_id) or {}
+    return {key: str(profile.get(key) or "Not specified") for key in _ORG_CONTEXT_KEYS}
 
 
 @observe(name="load_analysis_context")  # type: ignore[misc]
-async def _load_analysis_context(db: Any, tenant_id: str) -> str:
-    """Load the latest gap analysis results and recommendations for the tenant.
+async def _load_analysis_context(db: Any, tenant_id: str, profile_id: str) -> str:
+    """Load the latest gap analysis results and recommendations for this org profile.
 
     Returns a formatted text block ready to be injected into the prompt, or an
     empty string if no analysis has been run yet.
     """
-    # Find most recent analysis run for this tenant
+    # Find most recent analysis run for this tenant + org profile
     analysis = await db.analyses.find_one(
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "profile_id": profile_id},
         sort=[("_id", -1)],
     )
     if not analysis:
@@ -195,6 +183,7 @@ async def _load_analysis_context(db: Any, tenant_id: str) -> str:
 async def rag_stream(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     question: str,
     history: list[dict[str, str]],
 ) -> AsyncGenerator[dict[str, Any], None]:
@@ -226,7 +215,7 @@ async def rag_stream(
     chunks: list[dict[str, Any]] = []
     if query_vector:
         try:
-            chunks = await _tracked_hybrid_retrieve(db, tenant_id, question, query_vector)
+            chunks = await _tracked_hybrid_retrieve(db, tenant_id, profile_id, question, query_vector)
         except Exception as exc:
             logger.warning("Hybrid retrieval failed", error=str(exc))
 
@@ -240,14 +229,14 @@ async def rag_stream(
 
     # 3. Load org context
     try:
-        org_ctx = await _load_org_context(db, tenant_id)
+        org_ctx = await _load_org_context(db, tenant_id, profile_id)
     except Exception as exc:
         logger.warning("Failed to load org context", error=str(exc))
-        org_ctx = {k: "Not specified" for k in _ORG_FIELDS}
+        org_ctx = {k: "Not specified" for k in _ORG_CONTEXT_KEYS}
 
     # 4. Load gap analysis context (latest analysis results + recommendations)
     try:
-        analysis_context = await _load_analysis_context(db, tenant_id)
+        analysis_context = await _load_analysis_context(db, tenant_id, profile_id)
     except Exception as exc:
         logger.warning("Failed to load analysis context", error=str(exc))
         analysis_context = ""

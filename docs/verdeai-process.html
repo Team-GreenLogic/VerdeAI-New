@@ -1,0 +1,287 @@
+<title>VerdeAI Pipeline, Step by Step</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #F6F8F2;
+    --surface: #FFFFFF;
+    --ink: #17241B;
+    --ink-muted: #4D5D4F;
+    --border: #CBD6C4;
+    --accent: #2F5C3F;
+    --on-accent: #F6F8F2;
+    --loop: #6E8068;
+
+    --step-blue: #BAD6EA;
+    --step-teal: #9FDAD0;
+    --step-green: #BFE3C7;
+    --step-yellow: #F3E2A8;
+    --step-orange: #F0C89C;
+    --step-coral: #F3B8A8;
+    --step-rose: #F0C9CE;
+    --step-mauve: #E3C2E0;
+    --step-lavender: #CBB9E8;
+    --step-peri: #C2CBEF;
+    --pill-insufficient: #D8DCE6;
+    --chip-ink: #17241B;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10160F;
+      --surface: #182016;
+      --ink: #E9F0E5;
+      --ink-muted: #A7B6A2;
+      --border: #33422F;
+      --accent: #8FCBA0;
+      --on-accent: #10160F;
+      --loop: #9BBF9B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10160F;
+    --surface: #182016;
+    --ink: #E9F0E5;
+    --ink-muted: #A7B6A2;
+    --border: #33422F;
+    --accent: #8FCBA0;
+    --on-accent: #10160F;
+    --loop: #9BBF9B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding: 48px 24px 72px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 760px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 36px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  .dek {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    max-width: 70ch;
+  }
+
+  figure {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 22px 22px 18px;
+  }
+
+  .diagram-frame {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  svg.diagram {
+    display: block;
+    width: 100%;
+    min-width: 1140px;
+    height: auto;
+  }
+
+  figcaption {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--ink-muted);
+  }
+
+  figcaption strong { color: var(--ink); font-weight: 600; }
+
+  footer {
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  svg text {
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    fill: var(--ink);
+  }
+  svg .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  svg .muted { fill: var(--ink-muted); }
+  svg .chip-ink { fill: var(--chip-ink); }
+  svg .accent-ink { fill: var(--accent); }
+  svg .on-accent { fill: var(--on-accent); }
+  svg .loop-ink { fill: var(--loop); }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">Process overview &#183; medium detail</div>
+    <h1>VerdeAI Pipeline, Step by Step</h1>
+    <p class="dek">How a stack of company documents becomes an ISO&nbsp;14001 gap report &#8212; ingestion and indexing on top, per-clause evidence retrieval and reasoning on the bottom, looping until every clause is evaluated.</p>
+  </header>
+
+  <figure>
+    <div class="diagram-frame">
+      <svg class="diagram" viewBox="0 0 1460 700" role="img" aria-label="Eleven-step pipeline: company documents are deduplicated, parsed, chunked with AI-written context, and had their diagrams captioned, then embedded into a combined vector and keyword index. Per ISO 14001 clause, the system hybrid-retrieves evidence, reranks it, compares the organisation's declared state against the clause requirement, and reasons over the gap with an LLM chain of thought, looping back for the next clause. The final gap report lists Met, Partially Met, Not Met, or Insufficient Evidence for every clause, each with cited evidence.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"></path>
+          </marker>
+          <marker id="arrow-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--loop)"></path>
+          </marker>
+        </defs>
+
+        <text x="40" y="60" class="mono muted" font-size="12" letter-spacing="0.16em">VERDEAI &#8212; DOCUMENT-TO-GAP-REPORT PIPELINE</text>
+
+        <g stroke="currentColor" fill="none" color="var(--ink-muted)">
+          <!-- row 1 arrows -->
+          <line x1="245" y1="225" x2="262" y2="225" marker-end="url(#arrow)"></line>
+          <line x1="475" y1="225" x2="492" y2="225" marker-end="url(#arrow)"></line>
+          <line x1="705" y1="225" x2="722" y2="225" marker-end="url(#arrow)"></line>
+          <line x1="935" y1="225" x2="952" y2="225" marker-end="url(#arrow)"></line>
+          <line x1="1165" y1="225" x2="1182" y2="225" marker-end="url(#arrow)"></line>
+          <!-- bend -->
+          <line x1="1292.5" y1="300" x2="1292.5" y2="382" marker-end="url(#arrow)"></line>
+          <!-- row 2 arrows (right to left) -->
+          <line x1="1190" y1="465" x2="1173" y2="465" marker-end="url(#arrow)"></line>
+          <line x1="960" y1="465" x2="943" y2="465" marker-end="url(#arrow)"></line>
+          <line x1="730" y1="465" x2="713" y2="465" marker-end="url(#arrow)"></line>
+          <line x1="500" y1="465" x2="483" y2="465" marker-end="url(#arrow)"></line>
+        </g>
+
+        <!-- loop-back arrow: Analyse Gap -> Hybrid Retrieve, next clause -->
+        <path d="M 602.5 540 C 602.5 608, 1292.5 608, 1292.5 540" fill="none" stroke="var(--loop)" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#arrow-loop)"></path>
+        <text x="947.5" y="622" text-anchor="middle" class="mono loop-ink" font-size="10.5" font-weight="600">next clause &#8635;</text>
+
+        <!-- numbered circles -->
+        <g font-size="11.5" font-weight="700" text-anchor="middle" class="accent-ink">
+          <circle cx="70" cy="180" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="70" y="184">1</text>
+          <circle cx="300" cy="180" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="300" y="184">2</text>
+          <circle cx="530" cy="180" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="530" y="184">3</text>
+          <circle cx="760" cy="180" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="760" y="184">4</text>
+          <circle cx="990" cy="180" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="990" y="184">5</text>
+          <circle cx="1220" cy="180" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="1220" y="184">6</text>
+          <circle cx="1220" cy="420" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="1220" y="424">7</text>
+          <circle cx="990" cy="420" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="990" y="424">8</text>
+          <circle cx="760" cy="420" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="760" y="424">9</text>
+          <circle cx="530" cy="420" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="530" y="424">10</text>
+          <circle cx="300" cy="420" r="13" fill="var(--surface)" stroke="var(--accent)"></circle><text x="300" y="424">11</text>
+        </g>
+
+        <!-- row 1: ingestion + indexing -->
+        <rect x="40" y="150" width="205" height="150" rx="16" fill="var(--step-blue)" stroke="var(--border)"></rect>
+        <text x="142.5" y="228" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Company Documents</text>
+        <text x="142.5" y="250" text-anchor="middle" class="mono chip-ink" font-size="10">PDF &#183; DOCX uploads</text>
+
+        <rect x="270" y="150" width="205" height="150" rx="16" fill="var(--step-teal)" stroke="var(--border)"></rect>
+        <text x="372.5" y="228" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Dedup Check</text>
+        <text x="372.5" y="250" text-anchor="middle" class="mono chip-ink" font-size="10">skip repeats, flag changes</text>
+
+        <rect x="500" y="150" width="205" height="150" rx="16" fill="var(--step-green)" stroke="var(--border)"></rect>
+        <text x="602.5" y="228" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Parse &amp; Structure</text>
+        <text x="602.5" y="250" text-anchor="middle" class="mono chip-ink" font-size="10">text, tables, figures</text>
+
+        <rect x="730" y="150" width="205" height="150" rx="16" fill="var(--step-yellow)" stroke="var(--border)"></rect>
+        <text x="832.5" y="228" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Chunk + Context</text>
+        <text x="832.5" y="250" text-anchor="middle" class="mono chip-ink" font-size="10">overlap chunks + AI preamble</text>
+
+        <rect x="960" y="150" width="205" height="150" rx="16" fill="var(--step-orange)" stroke="var(--border)"></rect>
+        <text x="1062.5" y="228" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Caption Diagrams</text>
+        <text x="1062.5" y="250" text-anchor="middle" class="mono chip-ink" font-size="10">vision AI describes figures</text>
+
+        <rect x="1190" y="150" width="205" height="150" rx="16" fill="var(--step-coral)" stroke="var(--border)"></rect>
+        <text x="1292.5" y="228" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Embed + Index</text>
+        <text x="1292.5" y="250" text-anchor="middle" class="mono chip-ink" font-size="10">vector + keyword index</text>
+
+        <!-- row 2: per-clause gap analysis (right to left) -->
+        <rect x="1190" y="390" width="205" height="150" rx="16" fill="var(--step-rose)" stroke="var(--border)"></rect>
+        <text x="1292.5" y="468" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Hybrid Retrieve</text>
+        <text x="1292.5" y="490" text-anchor="middle" class="mono chip-ink" font-size="10">vector + keyword, fused</text>
+
+        <rect x="960" y="390" width="205" height="150" rx="16" fill="var(--step-mauve)" stroke="var(--border)"></rect>
+        <text x="1062.5" y="468" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Rerank Evidence</text>
+        <text x="1062.5" y="490" text-anchor="middle" class="mono chip-ink" font-size="10">AI keeps strongest matches</text>
+
+        <rect x="730" y="390" width="205" height="150" rx="16" fill="var(--step-lavender)" stroke="var(--border)"></rect>
+        <text x="832.5" y="468" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Compare State</text>
+        <text x="832.5" y="490" text-anchor="middle" class="mono chip-ink" font-size="10">org profile vs clause rule</text>
+
+        <rect x="500" y="390" width="205" height="150" rx="16" fill="var(--step-peri)" stroke="var(--border)"></rect>
+        <text x="602.5" y="468" text-anchor="middle" class="chip-ink" font-size="14" font-weight="700">Analyse Gap (LLM)</text>
+        <text x="602.5" y="490" text-anchor="middle" class="mono chip-ink" font-size="10">chain-of-thought reasoning</text>
+
+        <rect x="270" y="390" width="205" height="150" rx="16" fill="var(--accent)" stroke="var(--border)"></rect>
+        <text x="372.5" y="463" text-anchor="middle" class="on-accent" font-size="15" font-weight="700">Gap Report</text>
+        <text x="372.5" y="485" text-anchor="middle" class="on-accent" font-size="10.5" font-weight="500">aggregated per clause</text>
+        <text x="372.5" y="504" text-anchor="middle" class="mono on-accent" font-size="9.5">with cited evidence</text>
+
+        <!-- decision-outcome legend (unnumbered — not a pipeline step) -->
+        <rect x="40" y="390" width="205" height="150" rx="16" fill="none" stroke="var(--border)" stroke-dasharray="3 5"></rect>
+        <text x="142.5" y="414" text-anchor="middle" class="mono muted" font-size="9.5" letter-spacing="0.08em">DECISION OUTCOMES</text>
+
+        <rect x="55" y="426" width="175" height="22" rx="11" fill="var(--step-green)"></rect>
+        <text x="142.5" y="441" text-anchor="middle" class="chip-ink" font-size="10" font-weight="600">Met</text>
+
+        <rect x="55" y="454" width="175" height="22" rx="11" fill="var(--step-yellow)"></rect>
+        <text x="142.5" y="469" text-anchor="middle" class="chip-ink" font-size="10" font-weight="600">Partially Met</text>
+
+        <rect x="55" y="482" width="175" height="22" rx="11" fill="var(--step-rose)"></rect>
+        <text x="142.5" y="497" text-anchor="middle" class="chip-ink" font-size="10" font-weight="600">Not Met</text>
+
+        <rect x="55" y="510" width="175" height="22" rx="11" fill="var(--pill-insufficient)"></rect>
+        <text x="142.5" y="525" text-anchor="middle" class="chip-ink" font-size="10" font-weight="600">Insufficient Evidence</text>
+
+        <text x="730" y="660" text-anchor="middle" class="mono muted" font-size="10.5">steps 7&#8211;10 repeat until every ISO 14001 clause has been evaluated</text>
+
+      </svg>
+    </div>
+    <figcaption>
+      <strong>&#9312;</strong> Uploaded company documents (PDF / DOCX) go through a <strong>&#9313;</strong> dedup check that skips exact re-uploads and flags partial changes, then are <strong>&#9314;</strong> parsed with layout awareness (text, tables, figures kept distinct) and <strong>&#9315;</strong> split into overlapping chunks, each given a short AI-written context preamble. <strong>&#9316;</strong> Diagrams and charts are captioned by a vision model so they become searchable text, and everything is <strong>&#9317;</strong> embedded into a combined vector + keyword index. For each ISO&nbsp;14001 clause, the system <strong>&#9318;</strong> hybrid-retrieves candidate evidence (vector + keyword, fused), <strong>&#9319;</strong> reranks it down to the strongest matches, <strong>&#9320;</strong> compares the organisation&#8217;s declared state against that clause&#8217;s requirement, and <strong>&#9321;</strong> reasons over the mismatch with an LLM chain of thought &#8212; looping back to retrieval for the next clause. Once every clause has been evaluated, <strong>&#9322;</strong> the gap report aggregates a decision per clause &#8212; Met, Partially Met, Not Met, or Insufficient Evidence &#8212; each backed by cited evidence.
+    </figcaption>
+  </figure>
+
+  <footer>
+    Medium detail for a technical audience &#8212; infrastructure, auth, and data stores omitted by design.
+  </footer>
+
+</div>

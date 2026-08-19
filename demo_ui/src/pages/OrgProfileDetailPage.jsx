@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   getProfile, updateProfile,
   getCompleteness, listClauses, getClause, updateClause,
-} from '../api/orgProfile.js'
+} from '../api/orgProfiles.js'
 import Spinner from '../components/Spinner.jsx'
 
 function ProgressBar({ pct }) {
@@ -34,14 +35,12 @@ function FieldInput({ field, value, onChange }) {
 }
 
 // Tab 1: Org Info
-function OrgInfoTab() {
+function OrgInfoTab({ profileId }) {
   const FIELDS = [
     { key: 'org_name', label: 'Organisation Name' },
     { key: 'org_industry', label: 'Industry' },
     { key: 'org_size', label: 'Organisation Size' },
     { key: 'org_location', label: 'Location' },
-    { key: 'primary_activities', label: 'Primary Activities' },
-    { key: 'leadership_roles', label: 'Key Leadership Roles' },
   ]
   const [form, setForm] = useState({})
   const [loading, setLoading] = useState(true)
@@ -49,14 +48,14 @@ function OrgInfoTab() {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    getProfile().then(p => { setForm(p || {}); setLoading(false) })
-  }, [])
+    getProfile(profileId).then(p => { setForm(p || {}); setLoading(false) })
+  }, [profileId])
 
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
     try {
-      await updateProfile(form)
+      await updateProfile(profileId, form)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
@@ -68,15 +67,11 @@ function OrgInfoTab() {
 
   if (loading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
 
-  // Pair short fields into rows
-  const shortFields = FIELDS.slice(0, 4)
-  const longFields = FIELDS.slice(4)
-
   return (
     <form onSubmit={handleSave} className="max-w-2xl space-y-4">
       {/* 2-column grid for short fields */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {shortFields.map(({ key, label }) => (
+        {FIELDS.map(({ key, label }) => (
           <div key={key}>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}</label>
             <input
@@ -88,18 +83,17 @@ function OrgInfoTab() {
           </div>
         ))}
       </div>
-      {/* Full-width fields */}
-      {longFields.map(({ key, label }) => (
-        <div key={key}>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}</label>
-          <input
-            type="text"
-            value={form[key] || ''}
-            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-colors"
-          />
-        </div>
-      ))}
+      {/* Description — full width textarea */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Description</label>
+        <textarea
+          rows={4}
+          value={form.description || ''}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          placeholder="What this organisation does, and any context relevant to compliance"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-colors resize-none"
+        />
+      </div>
       <button
         type="submit"
         disabled={saving}
@@ -113,7 +107,7 @@ function OrgInfoTab() {
 }
 
 // Tab 2: Clause Fields
-function ClauseFieldsTab() {
+function ClauseFieldsTab({ profileId }) {
   const [clauses, setClauses] = useState([])
   const [selected, setSelected] = useState(null)
   const [clauseData, setClauseData] = useState(null)
@@ -123,14 +117,14 @@ function ClauseFieldsTab() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    listClauses().then(c => { setClauses(c || []); setLoading(false) })
-  }, [])
+    listClauses(profileId).then(c => { setClauses(c || []); setLoading(false) })
+  }, [profileId])
 
   async function selectClause(clauseId) {
     setSelected(clauseId)
     setClauseData(null)
     setSaved(false)
-    const data = await getClause(clauseId)
+    const data = await getClause(profileId, clauseId)
     setClauseData(data)
     const vals = {}
     data.fields.forEach(f => { vals[f.field_path] = f.value })
@@ -140,10 +134,10 @@ function ClauseFieldsTab() {
   async function handleSave() {
     setSaving(true)
     try {
-      await updateClause(selected, values)
+      await updateClause(profileId, selected, values)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-      const updated = await listClauses()
+      const updated = await listClauses(profileId)
       setClauses(updated || [])
     } catch (err) {
       alert(err.message)
@@ -228,18 +222,24 @@ function ClauseFieldsTab() {
   )
 }
 
-export default function OrgProfilePage() {
+export default function OrgProfileDetailPage() {
+  const { profileId } = useParams()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('info')
   const [completeness, setCompleteness] = useState(null)
 
   useEffect(() => {
-    getCompleteness().then(c => setCompleteness(c)).catch(() => {})
-  }, [])
+    getCompleteness(profileId).then(c => setCompleteness(c)).catch(() => {})
+  }, [profileId])
 
   const pct = completeness?.overall_pct ?? 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
+      <button onClick={() => navigate('/org-profiles')} className="text-xs text-slate-400 hover:text-brand-600 transition-colors">
+        ← Org Profiles
+      </button>
+
       {/* Completeness banner — temporarily hidden */}
       {false && completeness && (
         <div className="rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 text-white p-5">
@@ -295,7 +295,7 @@ export default function OrgProfilePage() {
       </div>
 
       <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-6">
-        {tab === 'info' ? <OrgInfoTab /> : <ClauseFieldsTab />}
+        {tab === 'info' ? <OrgInfoTab profileId={profileId} /> : <ClauseFieldsTab profileId={profileId} />}
       </div>
     </div>
   )

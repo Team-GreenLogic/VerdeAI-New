@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { uploadDocument, listDocuments, deleteDocument } from '../api/documents.js'
+import { getProfile } from '../api/orgProfiles.js'
 import { useJobProgress } from '../hooks/useJobProgress.js'
 import Badge from '../components/Badge.jsx'
 import Spinner from '../components/Spinner.jsx'
@@ -51,6 +53,9 @@ function ProgressPanel({ jobId, filename, onDone }) {
 }
 
 export default function Documents() {
+  const { profileId } = useParams()
+  const navigate = useNavigate()
+  const [profile, setProfile] = useState(null)
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -58,16 +63,21 @@ export default function Documents() {
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef()
 
+  useEffect(() => {
+    getProfile(profileId).then(setProfile).catch(() => setProfile(null))
+  }, [profileId])
+
   async function refresh() {
-    const data = await listDocuments().catch(() => [])
+    const data = await listDocuments(profileId).catch(() => [])
     const items = Array.isArray(data) ? data : data?.items || []
     setDocs(items.filter(doc => doc.status !== 'deleted'))
   }
 
   useEffect(() => {
     async function init() {
+      setLoading(true)
       try {
-        const data = await listDocuments().catch(() => ({ items: [] }))
+        const data = await listDocuments(profileId).catch(() => ({ items: [] }))
         const items = (Array.isArray(data) ? data : data?.items || []).filter(doc => doc.status !== 'deleted')
         setDocs(items)
 
@@ -84,7 +94,7 @@ export default function Documents() {
       }
     }
     init()
-  }, [])
+  }, [profileId])
 
   async function handleFiles(fileList) {
     const files = Array.from(fileList || [])
@@ -96,7 +106,7 @@ export default function Documents() {
     try {
       for (const file of files) {
         try {
-          const res = await uploadDocument(file)
+          const res = await uploadDocument(file, profileId)
           setActiveJobs(j => [...j, { jobId: res.document_id, filename: file.name }])
         } catch (err) {
           failed.push(`${file.name}: ${err.message}`)
@@ -141,7 +151,12 @@ export default function Documents() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Documents</h1>
+        <button onClick={() => navigate('/documents')} className="text-xs text-slate-400 hover:text-brand-600 mb-1 transition-colors">
+          ← Documents
+        </button>
+        <h1 className="text-2xl font-bold text-slate-900">
+          {profile?.org_name || 'Documents'}
+        </h1>
         <p className="text-sm text-slate-500 mt-1">Upload compliance evidence documents for analysis</p>
       </div>
 

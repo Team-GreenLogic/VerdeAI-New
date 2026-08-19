@@ -14,6 +14,7 @@ class DocumentUploadResponse(BaseModel):
 
 class DocumentItem(BaseModel):
     document_id: str
+    profile_id: str = ""
     filename: str
     status: str
     pages: int | None

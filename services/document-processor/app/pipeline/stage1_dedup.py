@@ -24,10 +24,16 @@ CDC_MIN = 2048
 CDC_MAX = 8192
 
 
-async def run(tenant_id: str, document_id: str, sha256: str) -> str:
-    """Run dedup stage. Returns final status: 'deduped' or 'parsed' (next stage)."""
+async def run(tenant_id: str, profile_id: str, document_id: str, sha256: str) -> str:
+    """Run dedup stage. Returns final status: 'deduped' or 'parsed' (next stage).
+
+    Both exact-duplicate (SHA-256, via ``hash_store``) and "modified version"
+    (same-filename + CDC overlap) detection are scoped to ``profile_id`` — a
+    document belongs to exactly one org profile, so the same file uploaded to a
+    different profile must not be flagged as a duplicate of it.
+    """
     db = get_database()
-    hash_repo = HashStoreRepository(db, tenant_id)
+    hash_repo = HashStoreRepository(db, tenant_id, profile_id)
 
     await emit(tenant_id, document_id, "dedup", "running", "Checking for duplicates")
 
@@ -79,7 +85,7 @@ async def run(tenant_id: str, document_id: str, sha256: str) -> str:
     cdc_hashes = await asyncio.to_thread(_compute_fastcdc_hashes, raw_bytes)
 
     # --- Check for modified version (>50% chunk overlap with existing doc) ---
-    await _check_modified_version(tenant_id, document_id, cdc_hashes, hash_repo, db)
+    await _check_modified_version(tenant_id, profile_id, document_id, cdc_hashes, hash_repo, db)
 
     # --- Store hashes ---
     await hash_repo.upsert(
@@ -105,6 +111,7 @@ def _compute_fastcdc_hashes(data: bytes) -> list[str]:
 
 async def _check_modified_version(
     tenant_id: str,
+    profile_id: str,
     document_id: str,
     new_hashes: list[str],
     hash_repo: HashStoreRepository,
@@ -123,6 +130,7 @@ async def _check_modified_version(
     prev = await db.documents.find_one(  # type: ignore[union-attr]
         {
             "tenant_id": tenant_id,
+            "profile_id": profile_id,
             "filename": filename,
             "_id": {"$ne": __import__("bson").ObjectId(document_id)},
             "status": {"$nin": ["deleted", "deduped", "superseded"]},

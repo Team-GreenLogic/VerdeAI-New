@@ -4,12 +4,13 @@ export async function getVersions() {
   return apiGet('/analyses/versions')
 }
 
-export async function createAnalysis(scope = 'full', versionId = 'iso-14001-2015') {
-  return apiPost('/analyses', { scope, version_id: versionId })
+export async function createAnalysis(profileId, scope = 'full', versionId = 'iso-14001-2015') {
+  return apiPost('/analyses', { profile_id: profileId, scope, version_id: versionId })
 }
 
-export async function listAnalyses() {
-  return apiGet('/analyses')
+export async function listAnalyses(profileId) {
+  const qs = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : ''
+  return apiGet(`/analyses${qs}`)
 }
 
 export async function getAnalysis(id) {

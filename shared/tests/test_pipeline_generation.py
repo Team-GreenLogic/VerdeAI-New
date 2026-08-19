@@ -199,7 +199,7 @@ async def test_recommendations_parses_object_shape(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(recommendations_module, "complete", fake_complete)
 
     gap_result = {"clause_id": "6.1.2", "decision": "Not Met", "missing_evidence": ["aspects register"]}
-    await generate_recommendations(db, "tenant-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
+    await generate_recommendations(db, "tenant-1", "profile-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
 
     assert len(db.recommendation_store.inserted) == 1
     assert db.recommendation_store.inserted[0]["text"] == "Do X"
@@ -217,7 +217,7 @@ async def test_recommendations_parses_bare_array_fallback(monkeypatch: pytest.Mo
     monkeypatch.setattr(recommendations_module, "complete", fake_complete)
 
     gap_result = {"clause_id": "6.1.2", "decision": "Not Met", "missing_evidence": []}
-    await generate_recommendations(db, "tenant-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
+    await generate_recommendations(db, "tenant-1", "profile-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
 
     assert len(db.recommendation_store.inserted) == 1
     assert db.recommendation_store.inserted[0]["text"] == "Do Y"
@@ -237,6 +237,6 @@ async def test_recommendations_malformed_json_logs_snippet_and_does_not_crash(mo
     monkeypatch.setattr(recommendations_module, "complete", fake_complete)
 
     gap_result = {"clause_id": "6.1.2", "decision": "Not Met", "missing_evidence": []}
-    await generate_recommendations(db, "tenant-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
+    await generate_recommendations(db, "tenant-1", "profile-1", "analysis-1", gap_result, version_id=CUSTOM_VERSION)
 
     assert db.recommendation_store.inserted == []

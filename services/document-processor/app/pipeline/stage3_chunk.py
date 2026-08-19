@@ -35,7 +35,7 @@ _CHUNK_TARGET_TOKENS = 512
 _CHUNK_OVERLAP_TOKENS = 64
 
 
-async def run(tenant_id: str, document_id: str) -> int:
+async def run(tenant_id: str, profile_id: str, document_id: str) -> int:
     """Chunk and contextualise the parsed document. Returns number of chunks created."""
     import bson
 
@@ -85,7 +85,7 @@ async def run(tenant_id: str, document_id: str) -> int:
 
     # --- Contextualise each chunk in batches ---
     tmpl = _jinja.get_template("contextualise_chunk.j2")
-    chunks_repo = ChunksRepository(db, tenant_id)
+    chunks_repo = ChunksRepository(db, tenant_id, profile_id)
     chunk_docs: list[dict[str, Any]] = []
 
     batch_size = 5
@@ -99,6 +99,7 @@ async def run(tenant_id: str, document_id: str) -> int:
             full_text = f"CONTEXT: {preamble}\n\n{chunk_text}" if preamble else chunk_text
             chunk_docs.append({
                 "tenant_id": tenant_id,
+                "profile_id": profile_id,
                 "document_id": document_id,
                 "chunk_index": global_index,
                 "text": full_text,

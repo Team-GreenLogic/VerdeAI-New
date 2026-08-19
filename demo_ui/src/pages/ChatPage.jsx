@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { createSession, deleteSession, getSessionMessages, listSessions, streamChat } from '../api/chat.js'
+import { listProfiles } from '../api/orgProfiles.js'
 import Spinner from '../components/Spinner.jsx'
 import MarkdownContent from '../components/MarkdownContent.jsx'
+
+const LAST_PROFILE_KEY = 'verdeai_last_chat_profile_id'
 
 const SendSVG = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -202,6 +206,12 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatPage() {
+  const [profiles, setProfiles] = useState([])
+  const [profilesLoading, setProfilesLoading] = useState(true)
+  const [profileId, setProfileId] = useState(() => {
+    return sessionStorage.getItem('chat_profile_id') || null
+  })
+  const [pendingProfileId, setPendingProfileId] = useState('')
   const [sessionId, setSessionId] = useState(() => {
     return sessionStorage.getItem('chat_session_id') || null
   })
@@ -237,20 +247,63 @@ export default function ChatPage() {
     }
   }, [sessionId])
 
+  // Load the tenant's org profiles once on mount, and auto-select the last
+  // used one (if it still exists) so returning users skip the picker.
   useEffect(() => {
+    listProfiles().then(list => {
+      setProfiles(list || [])
+      if (!profileId) {
+        const lastId = localStorage.getItem(LAST_PROFILE_KEY)
+        const match = (list || []).find(p => p.profile_id === lastId)
+        if (match) {
+          sessionStorage.setItem('chat_profile_id', match.profile_id)
+          setProfileId(match.profile_id)
+        }
+      }
+    }).catch(() => setProfiles([])).finally(() => setProfilesLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Once a profile is selected, ensure a chat session exists for it and load
+  // the profile's past conversations.
+  useEffect(() => {
+    if (!profileId) return
     if (!sessionId) {
       initSession()
     }
     refreshSessions()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  function selectProfile(pid) {
+    if (!pid) return
+    localStorage.setItem(LAST_PROFILE_KEY, pid)
+    sessionStorage.setItem('chat_profile_id', pid)
+    setProfileId(pid)
+  }
+
+  function switchProfile() {
+    abortRef.current?.abort()
+    setMessages([])
+    setSessionId(null)
+    setSessions([])
+    setInput('')
+    setStreaming(false)
+    setError('')
+    setPendingProfileId('')
+    sessionStorage.removeItem('chat_messages')
+    sessionStorage.removeItem('chat_session_id')
+    sessionStorage.removeItem('chat_profile_id')
+    setProfileId(null)
+  }
+
   async function initSession() {
     try {
-      const { session_id } = await createSession()
+      const { session_id } = await createSession(profileId)
       setSessionId(session_id)
     } catch (_) {
       setError('Failed to create chat session. Is the Chat RAG service running?')
@@ -259,7 +312,7 @@ export default function ChatPage() {
 
   async function refreshSessions() {
     try {
-      setSessions(await listSessions())
+      setSessions(await listSessions(profileId))
     } catch (_) {
       // Non-fatal — history panel just stays empty
     }
@@ -317,6 +370,7 @@ export default function ChatPage() {
     abortRef.current = streamChat(
       question,
       sessionId,
+      profileId,
       (token) => {
         setMessages(m => {
           const copy = [...m]
@@ -363,6 +417,59 @@ export default function ChatPage() {
     }
   }
 
+  if (profilesLoading) {
+    return <div className="flex justify-center items-center h-full"><Spinner size="lg" /></div>
+  }
+
+  if (profiles.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center gap-3 px-4">
+        <div className="text-slate-300"><ChatBubbleSVG /></div>
+        <p className="text-slate-700 font-semibold">No org profiles yet</p>
+        <p className="text-sm text-slate-400 max-w-sm">Create an org profile to start chatting with your compliance documents.</p>
+        <Link
+          to="/org-profiles"
+          className="inline-flex items-center gap-2 mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition-colors"
+        >
+          Create your first org profile
+        </Link>
+      </div>
+    )
+  }
+
+  if (!profileId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-4">
+        <div className="text-slate-300"><ChatBubbleSVG /></div>
+        <div>
+          <p className="text-slate-700 font-semibold">Choose an org profile to chat about</p>
+          <p className="text-sm text-slate-400 mt-1">Answers will be grounded in that profile's documents and context</p>
+        </div>
+        <div className="flex items-center gap-2 w-full max-w-sm">
+          <select
+            value={pendingProfileId}
+            onChange={e => setPendingProfileId(e.target.value)}
+            className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-400"
+          >
+            <option value="" disabled>Select an org profile…</option>
+            {profiles.map(p => (
+              <option key={p.profile_id} value={p.profile_id}>{p.org_name || 'Untitled Profile'}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => selectProfile(pendingProfileId)}
+            disabled={!pendingProfileId}
+            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
+          >
+            Start Chat
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const activeProfile = profiles.find(p => p.profile_id === profileId)
+
   return (
     <div className="relative flex h-full overflow-hidden">
       <div className="flex flex-col h-full flex-1 max-w-4xl mx-auto px-4 w-full transition-all duration-300">
@@ -370,7 +477,12 @@ export default function ChatPage() {
       <div className="flex items-center justify-between pb-4 border-b border-slate-200">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Compliance Chat</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Ask anything about your ISO 14001 compliance</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Ask anything about your ISO 14001 compliance ·{' '}
+            <button onClick={switchProfile} className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+              {activeProfile?.org_name || 'Untitled Profile'} (switch)
+            </button>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button

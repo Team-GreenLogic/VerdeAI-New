@@ -624,7 +624,7 @@ function MissingRequirementsTab({ analysisId, version }) {
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function AnalysisDetailPage() {
-  const { id } = useParams()
+  const { profileId, analysisId: id } = useParams()
   const navigate = useNavigate()
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -689,7 +689,7 @@ export default function AnalysisDetailPage() {
     setDeleting(true)
     try {
       await deleteAnalysis(id)
-      navigate('/analyses')
+      navigate(`/analyses/${profileId}`)
     } catch (err) {
       alert(err.message || 'Failed to delete analysis')
       setDeleting(false)
@@ -710,7 +710,7 @@ export default function AnalysisDetailPage() {
     setReanalyzing(true)
     try {
       const res = await reanalyzeDelta(id)
-      navigate(`/analyses/${res.analysis_id}`)
+      navigate(`/analyses/${profileId}/${res.analysis_id}`)
     } catch (err) {
       alert(err.message)
       setReanalyzing(false)
@@ -750,6 +750,9 @@ export default function AnalysisDetailPage() {
       <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-5">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
+            <button onClick={() => navigate(`/analyses/${profileId}`)} className="text-xs text-slate-400 hover:text-brand-600 mb-1 transition-colors">
+              ← Analyses
+            </button>
             <h1 className="text-xl font-bold text-slate-900">Analysis Detail</h1>
             <p className="text-xs text-slate-400 mt-1 font-mono">{analysis.analysis_id}</p>
             <p className="text-xs text-slate-400">{new Date(analysis.created_at).toLocaleString()}</p>

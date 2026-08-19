@@ -29,7 +29,7 @@ _PROMPTS_DIR = Path(_vs_pkg.__file__).parent / "llm" / "prompts"
 _jinja = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)), autoescape=False)
 
 
-async def run(tenant_id: str, document_id: str) -> int:
+async def run(tenant_id: str, profile_id: str, document_id: str) -> int:
     """Summarise images and insert as image_summary chunks. Returns count."""
     db = get_database()
 
@@ -57,7 +57,7 @@ async def run(tenant_id: str, document_id: str) -> int:
 
     tmpl = _jinja.get_template("image_summary.j2")
     prompt_text = tmpl.render()
-    chunks_repo = ChunksRepository(db, tenant_id)
+    chunks_repo = ChunksRepository(db, tenant_id, profile_id)
     image_chunks: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -70,6 +70,7 @@ async def run(tenant_id: str, document_id: str) -> int:
                 if summary:
                     image_chunks.append({
                         "tenant_id": tenant_id,
+                        "profile_id": profile_id,
                         "document_id": document_id,
                         "text": summary,
                         "context_preamble": "",

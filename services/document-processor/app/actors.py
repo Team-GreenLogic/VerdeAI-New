@@ -33,11 +33,13 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
         raise
 
     tenant_id = event.tenant_id
+    profile_id = event.profile_id
     document_id = event.document_id
 
     logger.info(
         "Processing document",
         tenant_id=tenant_id,
+        profile_id=profile_id,
         document_id=document_id,
         filename=event.filename,
     )
@@ -46,6 +48,7 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
         # Stage 1 — dedup gate
         result = await stage1_dedup.run(
             tenant_id=tenant_id,
+            profile_id=profile_id,
             document_id=document_id,
             sha256=event.sha256,
         )
@@ -53,24 +56,24 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
         if result == "deduped":
             return
 
-        # Stage 2 — LlamaParse
+        # Stage 2 — LlamaParse (content extraction only — no profile scoping needed)
         pages = await stage2_parse.run(tenant_id=tenant_id, document_id=document_id)
         logger.info("Stage 2 complete", tenant_id=tenant_id, document_id=document_id, pages=pages)
 
         # Stage 3 — chunking + contextualisation
-        chunk_count = await stage3_chunk.run(tenant_id=tenant_id, document_id=document_id)
+        chunk_count = await stage3_chunk.run(tenant_id=tenant_id, profile_id=profile_id, document_id=document_id)
         logger.info("Stage 3 complete", tenant_id=tenant_id, document_id=document_id, chunks=chunk_count)
 
         # Stage 4 — image summaries (skipped if no images)
-        img_count = await stage4_image.run(tenant_id=tenant_id, document_id=document_id)
+        img_count = await stage4_image.run(tenant_id=tenant_id, profile_id=profile_id, document_id=document_id)
         logger.info("Stage 4 complete", tenant_id=tenant_id, document_id=document_id, images=img_count)
 
         # Stage 5 — embedding
-        embedded = await stage5_embed.run(tenant_id=tenant_id, document_id=document_id)
+        embedded = await stage5_embed.run(tenant_id=tenant_id, profile_id=profile_id, document_id=document_id)
         logger.info("Stage 5 complete", tenant_id=tenant_id, document_id=document_id, embedded=embedded)
 
         # Stage 6 — BM25 indexing
-        await stage6_index.run(tenant_id=tenant_id, document_id=document_id)
+        await stage6_index.run(tenant_id=tenant_id, profile_id=profile_id, document_id=document_id)
         logger.info("Stage 6 complete", tenant_id=tenant_id, document_id=document_id)
 
         # Mark document ready
@@ -86,7 +89,7 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
         # stage 1 via same-filename + >50% CDC overlap), supersede the previous
         # version: soft-delete its chunks and prune them from the BM25 index so
         # retrieval only ever sees the latest version.
-        await _supersede_previous_version(db, tenant_id, document_id)
+        await _supersede_previous_version(db, tenant_id, profile_id, document_id)
 
         # Publish DocumentReady event
         await _publish_ready(DocumentReady(
@@ -119,7 +122,7 @@ async def handle_document_uploaded(message: IncomingMessage) -> None:
         raise
 
 
-async def _supersede_previous_version(db: object, tenant_id: str, document_id: str) -> None:
+async def _supersede_previous_version(db: object, tenant_id: str, profile_id: str, document_id: str) -> None:
     """Soft-delete the chunks of the document this upload replaces.
 
     ``stage1_dedup._check_modified_version`` records ``previous_version_id`` on the
@@ -136,9 +139,9 @@ async def _supersede_previous_version(db: object, tenant_id: str, document_id: s
     if not prev_id:
         return
 
-    chunk_ids = await ChunksRepository(db, tenant_id).supersede_document(prev_id, document_id)
+    chunk_ids = await ChunksRepository(db, tenant_id, profile_id).supersede_document(prev_id, document_id)
     if chunk_ids:
-        await remove_document_from_bm25_index(db, tenant_id, chunk_ids)
+        await remove_document_from_bm25_index(db, tenant_id, profile_id, chunk_ids)
 
     await db.documents.update_one(  # type: ignore[attr-defined]
         {"_id": bson.ObjectId(prev_id), "tenant_id": tenant_id},
@@ -163,6 +166,7 @@ async def handle_document_deleted(message: IncomingMessage) -> None:
         raise
 
     tenant_id = event.tenant_id
+    profile_id = event.profile_id
     document_id = event.document_id
 
     logger.info("Invalidating document chunks", tenant_id=tenant_id, document_id=document_id)
@@ -180,7 +184,7 @@ async def handle_document_deleted(message: IncomingMessage) -> None:
 
     # Prune BM25 index first (uses chunk IDs still present in DB)
     if chunk_ids:
-        await remove_document_from_bm25_index(db, tenant_id, chunk_ids)
+        await remove_document_from_bm25_index(db, tenant_id, profile_id, chunk_ids)
         logger.info("BM25 index pruned", tenant_id=tenant_id, removed=len(chunk_ids))
 
     # Hard-delete chunks (vector search auto-excludes once docs are gone)

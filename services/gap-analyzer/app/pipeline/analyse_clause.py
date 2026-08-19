@@ -233,7 +233,9 @@ async def _retrieve_node(state: ClauseState, config: RunnableConfig) -> dict[str
     query_text = state["query_text"]
     # Let exceptions propagate so the actor can distinguish a retrieval failure
     # from a genuine "no documents in the knowledge base" result.
-    chunks = await hybrid_retrieve(cfg["db"], cfg["tenant_id"], query_text, state["query_vector"])
+    chunks = await hybrid_retrieve(
+        cfg["db"], cfg["tenant_id"], cfg["profile_id"], query_text, state["query_vector"]
+    )
     if chunks:
         chunks = await _enrich_chunks_with_filenames(cfg["db"], cfg["tenant_id"], chunks)
     return {"chunks": chunks}
@@ -290,7 +292,11 @@ async def _load_org_profile_node(state: ClauseState, config: RunnableConfig) -> 
     cfg: dict[str, Any] = config.get("configurable") or {}  # type: ignore[assignment]
     clause_id: str = state["clause"]["clause_id"]
     org_cursor = cfg["db"].org_profile.find(
-        {"tenant_id": cfg["tenant_id"], "field_path": {"$regex": f"^{clause_id}\\."}}
+        {
+            "tenant_id": cfg["tenant_id"],
+            "profile_id": cfg["profile_id"],
+            "field_path": {"$regex": f"^{clause_id}\\."},
+        }
     )
     org_entries = await org_cursor.to_list(None)
     return {"org_profile_map": {e["field_path"]: e.get("value") for e in org_entries}}
@@ -640,6 +646,7 @@ _clause_graph = _build_clause_graph()
 async def analyse_clause(
     db: Any,
     tenant_id: str,
+    profile_id: str,
     analysis_id: str,
     clause: dict[str, Any],
     on_thinking: Callable[[str], Awaitable[None]] | None = None,
@@ -670,6 +677,7 @@ async def analyse_clause(
         "configurable": {
             "db": db,
             "tenant_id": tenant_id,
+            "profile_id": profile_id,
             "analysis_id": analysis_id,
             "clause_id": clause.get("clause_id", ""),
             "redis_client": redis_client,

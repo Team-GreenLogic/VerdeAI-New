@@ -16,13 +16,13 @@ from verdeai_shared.settings import settings
 from app.progress import emit
 
 
-async def run(tenant_id: str, document_id: str) -> int:
+async def run(tenant_id: str, profile_id: str, document_id: str) -> int:
     """Embed all chunks for the document. Returns number of chunks embedded."""
     db = get_database()
 
     await emit(tenant_id, document_id, "embed", "running", "Embedding chunks")
 
-    chunks_repo = ChunksRepository(db, tenant_id)
+    chunks_repo = ChunksRepository(db, tenant_id, profile_id)
     chunks = await chunks_repo.find_by_document(document_id)
 
     if not chunks:
@@ -77,6 +77,7 @@ async def _ensure_vector_index(db: object) -> None:
                             "similarity": "cosine",
                         },
                         {"type": "filter", "path": "tenant_id"},
+                        {"type": "filter", "path": "profile_id"},
                         {"type": "filter", "path": "document_id"},
                         {"type": "filter", "path": "content_type"},
                         {"type": "filter", "path": "superseded"},

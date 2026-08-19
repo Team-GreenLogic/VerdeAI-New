@@ -15,6 +15,7 @@ class DocumentUploaded(BaseModel):
     schema_version: int = 1
     event_id: str = Field(default_factory=_new_event_id)
     tenant_id: str
+    profile_id: str
     document_id: str
     filename: str
     sha256: str
@@ -33,6 +34,7 @@ class DocumentDeleted(BaseModel):
     schema_version: int = 1
     event_id: str = Field(default_factory=_new_event_id)
     tenant_id: str
+    profile_id: str
     document_id: str
 
 
@@ -40,6 +42,7 @@ class AnalysisRequested(BaseModel):
     schema_version: int = 1
     event_id: str = Field(default_factory=_new_event_id)
     tenant_id: str
+    profile_id: str
     analysis_id: str
     scope: Literal["full"] | dict[str, list[str]]
     version_id: str = "iso-14001-2015"

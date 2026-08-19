@@ -15,8 +15,10 @@ async def vector_search_chunks(
     top_k: int | None = None,
     document_id: str | None = None,
     created_after: datetime | None = None,
+    profile_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Run $vectorSearch on the chunks collection filtered by tenant_id.
+    """Run $vectorSearch on the chunks collection filtered by tenant_id (and profile_id,
+    when given, to keep a gap-analysis/chat run's evidence isolated to one org profile).
 
     Superseded chunks (older versions of a re-uploaded document) are always
     excluded. When ``created_after`` is given, only chunks ingested after that
@@ -27,6 +29,8 @@ async def vector_search_chunks(
         "tenant_id": {"$eq": tenant_id},
         "superseded": {"$eq": False},
     }
+    if profile_id:
+        pre_filter["profile_id"] = {"$eq": profile_id}
     if document_id:
         pre_filter["document_id"] = {"$eq": document_id}
     if created_after is not None:
@@ -47,6 +51,7 @@ async def vector_search_chunks(
             "$project": {
                 "_id": 1,
                 "tenant_id": 1,
+                "profile_id": 1,
                 "document_id": 1,
                 "page": 1,
                 "text": 1,

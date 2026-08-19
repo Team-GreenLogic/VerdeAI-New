@@ -3,11 +3,21 @@ import { useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar.jsx'
 
 const PAGE_LABELS = {
-  '/dashboard':   'Dashboard',
-  '/documents':   'Documents',
-  '/org-profile': 'Organisation Profile',
-  '/analyses':    'Gap Analysis',
-  '/chat':        'Compliance Chat',
+  '/dashboard':    'Dashboard',
+  '/documents':    'Documents',
+  '/org-profiles': 'Org Profiles',
+  '/analyses':     'Gap Analysis',
+  '/chat':         'Compliance Chat',
+}
+
+function getPageLabel(pathname) {
+  // Most specific patterns first: /analyses/:profileId/:analysisId is analysis
+  // detail; /analyses/:profileId is the analysis list for that profile.
+  if (/^\/analyses\/[^/]+\/[^/]+/.test(pathname)) return 'Analysis Detail'
+  if (/^\/analyses\/[^/]+/.test(pathname)) return 'Gap Analysis'
+  if (/^\/documents\/[^/]+/.test(pathname)) return 'Documents'
+  if (/^\/org-profiles\/[^/]+/.test(pathname)) return 'Org Profile'
+  return PAGE_LABELS[pathname] || ''
 }
 
 export default function Layout({ children }) {
@@ -19,9 +29,7 @@ export default function Layout({ children }) {
     setSidebarOpen(false)
   }, [location.pathname])
 
-  const pageLabel = location.pathname.startsWith('/analyses/')
-    ? 'Analysis Detail'
-    : (PAGE_LABELS[location.pathname] || '')
+  const pageLabel = getPageLabel(location.pathname)
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">

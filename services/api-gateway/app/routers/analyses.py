@@ -4,13 +4,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from loguru import logger
 from pydantic import BaseModel
 
 from verdeai_shared.auth.tenant import CurrentPrincipal
 from verdeai_shared.db.mongo import get_database
 from verdeai_shared.db.repositories.iso_versions import DEFAULT_VERSION_ID, ISOVersionsRepository
+from verdeai_shared.db.repositories.org_profiles import OrgProfilesRepository
 from verdeai_shared.messaging.events import AnalysisRequested
 
 from app.services.analysis_publisher import publish_analysis_requested
@@ -23,6 +24,7 @@ _ACTIVE_STATUSES = ("pending", "running")
 
 class AnalysisSummary(BaseModel):
     analysis_id: str
+    profile_id: str = ""
     status: str
     gap_count: int | None
     scope: Any
@@ -51,6 +53,7 @@ class VersionItem(BaseModel):
 
 
 class AnalysisCreateRequest(BaseModel):
+    profile_id: str
     scope: Literal["full"] | dict[str, list[str]] = "full"
     version_id: str = DEFAULT_VERSION_ID
 
@@ -91,10 +94,10 @@ async def _get_owned(db: Any, analysis_id: str, tenant_id: str) -> dict[str, Any
     return doc
 
 
-async def _assert_no_active(db: Any, tenant_id: str) -> None:
-    """Raise 409 if any analysis is currently pending or running for this tenant."""
+async def _assert_no_active(db: Any, tenant_id: str, profile_id: str) -> None:
+    """Raise 409 if any analysis is currently pending or running for this org profile."""
     active = await db.analyses.find_one(
-        {"tenant_id": tenant_id, "status": {"$in": list(_ACTIVE_STATUSES)}}
+        {"tenant_id": tenant_id, "profile_id": profile_id, "status": {"$in": list(_ACTIVE_STATUSES)}}
     )
     if active:
         raise HTTPException(
@@ -120,12 +123,18 @@ async def list_published_versions(principal: CurrentPrincipal) -> list[VersionIt
 
 
 @router.get("", response_model=list[AnalysisSummary])
-async def list_analyses(principal: CurrentPrincipal) -> list[AnalysisSummary]:
-    """List all analyses for the current tenant, newest first."""
+async def list_analyses(
+    principal: CurrentPrincipal,
+    profile_id: str | None = Query(default=None),
+) -> list[AnalysisSummary]:
+    """List analyses for the current tenant, optionally scoped to one org profile, newest first."""
     tenant_id = principal.tenant_id
     db = get_database()
+    query: dict[str, Any] = {"tenant_id": tenant_id}
+    if profile_id:
+        query["profile_id"] = profile_id
     cursor = db.analyses.find(
-        {"tenant_id": tenant_id},
+        query,
         sort=[("created_at", -1)],
         limit=50,
     )
@@ -133,6 +142,7 @@ async def list_analyses(principal: CurrentPrincipal) -> list[AnalysisSummary]:
     return [
         AnalysisSummary(
             analysis_id=r["analysis_id"],
+            profile_id=r.get("profile_id", ""),
             status=r.get("status", "unknown"),
             gap_count=r.get("gap_count"),
             scope=r.get("scope"),
@@ -150,11 +160,14 @@ async def create_analysis(
     body: AnalysisCreateRequest,
     principal: CurrentPrincipal,
 ) -> AnalysisCreateResponse:
-    """Trigger a new gap analysis. Returns 409 if one is already running."""
+    """Trigger a new gap analysis. Returns 409 if one is already running for this org profile."""
     tenant_id = principal.tenant_id
     db = get_database()
 
-    await _assert_no_active(db, tenant_id)
+    if await OrgProfilesRepository(db, tenant_id).get(body.profile_id) is None:
+        raise HTTPException(status_code=404, detail="Org profile not found")
+
+    await _assert_no_active(db, tenant_id, body.profile_id)
 
     # Validate that the requested version is published
     version_id = body.version_id
@@ -170,6 +183,7 @@ async def create_analysis(
     await db.analyses.insert_one({
         "analysis_id": analysis_id,
         "tenant_id": tenant_id,
+        "profile_id": body.profile_id,
         "scope": body.scope,
         "version_id": version_id,
         "status": "pending",
@@ -179,6 +193,7 @@ async def create_analysis(
 
     event = AnalysisRequested(
         tenant_id=tenant_id,
+        profile_id=body.profile_id,
         analysis_id=analysis_id,
         scope=body.scope,
         version_id=version_id,
@@ -234,9 +249,10 @@ async def resume_analysis(
             detail=f"Cannot resume an analysis with status '{doc['status']}'.",
         )
 
-    # Ensure no other analysis is already running
+    # Ensure no other analysis is already running for this org profile
     other_active = await db.analyses.find_one({
         "tenant_id": tenant_id,
+        "profile_id": doc["profile_id"],
         "analysis_id": {"$ne": analysis_id},
         "status": {"$in": list(_ACTIVE_STATUSES)},
     })
@@ -253,6 +269,7 @@ async def resume_analysis(
 
     event = AnalysisRequested(
         tenant_id=tenant_id,
+        profile_id=doc["profile_id"],
         analysis_id=analysis_id,
         scope=doc["scope"],
         version_id=doc.get("version_id", DEFAULT_VERSION_ID),
@@ -319,14 +336,17 @@ async def get_staleness(
     db = get_database()
     doc = await _get_owned(db, analysis_id, tenant_id)
     baseline = doc.get("created_at", datetime.now(timezone.utc))
+    profile_id = doc.get("profile_id", "")
 
     new_chunk_count = await db.chunks.count_documents({
         "tenant_id": tenant_id,
+        "profile_id": profile_id,
         "superseded": {"$ne": True},
         "created_at": {"$gt": baseline},
     })
     removed_chunk_count = await db.chunks.count_documents({
         "tenant_id": tenant_id,
+        "profile_id": profile_id,
         "superseded": True,
         "superseded_at": {"$gt": baseline},
     })
@@ -361,7 +381,8 @@ async def reanalyze_delta(
                    f"(current status: '{parent.get('status', 'unknown')}').",
         )
 
-    await _assert_no_active(db, tenant_id)
+    profile_id = parent["profile_id"]
+    await _assert_no_active(db, tenant_id, profile_id)
 
     new_analysis_id = str(uuid.uuid4())
     baseline_at = parent.get("created_at", datetime.now(timezone.utc))
@@ -372,6 +393,7 @@ async def reanalyze_delta(
     await db.analyses.insert_one({
         "analysis_id": new_analysis_id,
         "tenant_id": tenant_id,
+        "profile_id": profile_id,
         "scope": scope,
         "version_id": version_id,
         "status": "pending",
@@ -384,6 +406,7 @@ async def reanalyze_delta(
 
     event = AnalysisRequested(
         tenant_id=tenant_id,
+        profile_id=profile_id,
         analysis_id=new_analysis_id,
         scope=scope,
         version_id=version_id,
