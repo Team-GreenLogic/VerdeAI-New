@@ -45,7 +45,7 @@ export default function Login() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gray-50 px-4 overflow-hidden">
+    <div className="relative flex min-h-dvh items-center justify-center bg-gray-50 px-4 overflow-hidden dark:bg-slate-950">
       {/* Animated background blobs */}
       <div className="bg-blob bg-blob-1" />
       <div className="bg-blob bg-blob-2" />

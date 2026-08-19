@@ -143,10 +143,10 @@ function ProgressPanel({ analysisId, currentClauseId = null, initialGapCount = 0
   }, [clauseLog.length])
 
   const decisionBorder = (d) => {
-    if (d === 'Met') return 'border-l-emerald-500 text-emerald-700 bg-emerald-50'
-    if (d === 'Partially Met') return 'border-l-amber-500 text-amber-700 bg-amber-50'
-    if (d === 'Insufficient Evidence') return 'border-l-amber-400 text-amber-700 bg-amber-50'
-    return 'border-l-red-500 text-red-700 bg-red-50'
+    if (d === 'Met') return 'border-l-emerald-500 text-emerald-800 bg-emerald-50 dark:text-emerald-200 dark:bg-emerald-950/60'
+    if (d === 'Partially Met') return 'border-l-amber-500 text-amber-900 bg-amber-50 dark:text-amber-200 dark:bg-amber-950/60'
+    if (d === 'Insufficient Evidence') return 'border-l-slate-400 text-slate-700 bg-slate-50 dark:text-slate-200 dark:bg-slate-800'
+    return 'border-l-red-500 text-red-800 bg-red-50 dark:text-red-200 dark:bg-red-950/60'
   }
 
   return (
@@ -254,10 +254,10 @@ function GapResultsTab({ analysisId, version }) {
   }, {})
 
   const summaryStyle = (d) => {
-    if (d === 'Met') return 'bg-emerald-50 border-emerald-200 text-emerald-700'
-    if (d === 'Partially Met') return 'bg-amber-50 border-amber-200 text-amber-700'
-    if (d === 'Not Met') return 'bg-red-50 border-red-200 text-red-700'
-    return 'bg-slate-50 border-slate-200 text-slate-600'
+    if (d === 'Met') return 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:border-emerald-700 dark:text-emerald-200'
+    if (d === 'Partially Met') return 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/60 dark:border-amber-700 dark:text-amber-200'
+    if (d === 'Not Met') return 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/60 dark:border-red-700 dark:text-red-200'
+    return 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200'
   }
 
   const expandedBorder = (d) => {

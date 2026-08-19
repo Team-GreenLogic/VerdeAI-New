@@ -35,8 +35,8 @@ Domain guardrails (MANDATORY — follow these BEFORE answering):
 {% endif %}
 
 Citation rules (MANDATORY):
-- Cite stored decisions as [analysis:<analysis_id>, clause <clause_id>].
-- When a document citation is available for a claim, also cite it as [doc:<filename>, p.<page>].
+- Every supplied source has a stable key in a `[Source <source_key> | ...]` header. Cite it exactly as `[source:<source_key>]`.
+- Cite the analysis source for stored decisions. When grounded document evidence is available for a claim, also cite its document source.
 - Only cite analyses and documents present in the supplied context.
 - If the analysis contains no support for a profile-specific claim, say the latest analysis does not establish it; do not fabricate or perform a new audit in chat.
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createSession, deleteSession, getChatContext, getSessionMessages, listSessions, streamChat } from '../api/chat.js'
 import { listProfiles } from '../api/orgProfiles.js'
@@ -6,6 +6,20 @@ import Spinner from '../components/Spinner.jsx'
 import MarkdownContent from '../components/MarkdownContent.jsx'
 
 const LAST_PROFILE_KEY = 'verdeai_last_chat_profile_id'
+const COLOMBO_DATE_TIME = new Intl.DateTimeFormat('en-LK', {
+  timeZone: 'Asia/Colombo',
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function formatColomboDateTime(value) {
+  if (!value) return 'Time unavailable'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Time unavailable' : COLOMBO_DATE_TIME.format(date)
+}
 
 const SendSVG = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -43,43 +57,77 @@ const TrashSVG = () => (
   </svg>
 )
 
-function CitationPanel({ citation, onClose }) {
+function citationLabel(citation) {
+  if (citation?.display_label) return citation.display_label
+  if (citation?.type === 'analysis') return `Clause ${citation.clause_id} · ${citation.decision}`
+  return `${citation?.filename || 'Document'} · p.${citation?.page ?? '?'}`
+}
+
+function CitationPanel({ citation, profileId, onClose }) {
+  const closeRef = useRef(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!citation) return
+    closeRef.current?.focus()
+    const closeOnEscape = (event) => event.key === 'Escape' && onClose()
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [citation, onClose])
   if (!citation) return null
   const isAnalysis = citation.type === 'analysis'
+  const copyExcerpt = async () => {
+    await navigator.clipboard?.writeText(citation.text || '')
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
       onClick={onClose}
+      role="presentation"
     >
       <div
-        className="w-full max-w-lg max-h-[80vh] rounded-xl bg-white shadow-2xl flex flex-col overflow-hidden"
+        className="flex max-h-[85dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
         onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="citation-title"
       >
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
-          <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+          <h3 id="citation-title" className="font-semibold text-slate-900 text-sm flex items-center gap-2">
             <DocSVG />
             {isAnalysis ? 'Gap Analysis Reference' : 'Document Reference'}
           </h3>
           <button
+            ref={closeRef}
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors"
+            aria-label="Close citation"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200 p-1.5 rounded-full transition-colors"
           >
             <CloseSVG />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto scrollbar-thin">
-          <div className="mb-4">
-            <p className="font-semibold text-brand-700 text-sm">
-              {isAnalysis ? `Clause ${citation.clause_id}` : citation.filename}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-5 scrollbar-thin">
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/40">
+            <p className="font-semibold text-emerald-900 text-sm dark:text-emerald-200">{citationLabel(citation)}</p>
+            <p className="text-xs text-slate-500 mt-1 dark:text-slate-400">
               {isAnalysis
                 ? `${citation.decision} · ${citation.version_id || 'ISO 14001'} · ${citation.analysis_id}`
                 : `Page ${citation.page}${citation.clause_id ? ` · Clause ${citation.clause_id}` : ''}`}
             </p>
           </div>
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
-            <MarkdownContent content={citation.text || 'No excerpt available.'} />
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+            <MarkdownContent className="break-words" content={citation.text || 'No excerpt available.'} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <button onClick={copyExcerpt} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+              {copied ? 'Copied' : 'Copy excerpt'}
+            </button>
+            {isAnalysis && citation.analysis_id && (
+              <Link to={`/analyses/${profileId}/${citation.analysis_id}`} onClick={onClose} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 dark:bg-emerald-700 dark:hover:bg-emerald-600">
+                Open full analysis
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -87,58 +135,69 @@ function CitationPanel({ citation, onClose }) {
   )
 }
 
-function HistoryPanel({ open, sessions, activeSessionId, onSelect, onDelete, onClose }) {
-  if (!open) return null
+function HistoryPanel({ open, collapsed, sessions, activeSessionId, onSelect, onDelete, onClose, onCollapse, onNew }) {
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => sessions.filter(s => (s.title || 'New conversation').toLowerCase().includes(query.toLowerCase())), [sessions, query])
   return (
-    <div className="absolute top-0 left-0 w-80 h-full bg-white border-r border-slate-200 shadow-2xl z-40 flex flex-col animate-slide-in-left">
-      <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
-        <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-          <HistorySVG />
-          Past Conversations
-        </h3>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-full transition-colors"
-        >
-          <CloseSVG />
+    <>
+      {open && <button aria-label="Close history" onClick={onClose} className="fixed inset-0 z-30 bg-slate-950/30 lg:hidden" />}
+      <aside className={`${open ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-40 w-72 border-r border-slate-200 bg-white text-slate-900 shadow-xl transition-transform dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:shadow-none lg:static lg:z-auto lg:translate-x-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'} flex flex-col flex-shrink-0`}>
+      <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4 dark:border-white/10">
+        {!collapsed && <h3 className="font-semibold text-sm flex items-center gap-2 text-slate-800 dark:text-slate-100"><HistorySVG /> Conversations</h3>}
+        <button onClick={onCollapse} title={collapsed ? 'Expand history' : 'Collapse history'} className="hidden lg:flex rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white">
+          <svg aria-hidden="true" className={`h-4 w-4 transition-transform ${collapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" /></svg>
         </button>
+        <button onClick={onClose} className="lg:hidden rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"><CloseSVG /></button>
+      </div>
+      <div className="p-3">
+        <button onClick={onNew} title="New conversation" className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-2'} rounded-xl bg-emerald-500 px-3 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400`}><PencilSVG />{!collapsed && 'New conversation'}</button>
+        {!collapsed && <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search conversations" className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-slate-500" />}
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {sessions.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center p-6">No past conversations yet.</p>
+        {filtered.length === 0 ? (
+          !collapsed && <p className="text-xs text-slate-500 text-center p-6">No conversations found.</p>
         ) : (
-          sessions.map((s) => (
+          filtered.map((s) => (
             <button
               key={s.session_id}
               onClick={() => onSelect(s.session_id)}
-              className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex items-start justify-between gap-2 group ${
-                s.session_id === activeSessionId ? 'bg-brand-50' : ''
+              title={s.title || 'New conversation'}
+              className={`w-full text-left px-3 py-3 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors flex items-start justify-between gap-2 group ${
+                s.session_id === activeSessionId ? 'bg-emerald-50 dark:bg-white/10 border-l-2 border-emerald-500 dark:border-emerald-400' : 'border-l-2 border-transparent'
               }`}
             >
-              <div className="min-w-0">
-                <p className="text-sm text-slate-800 truncate">{s.title || 'New conversation'}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {new Date(s.last_message_at).toLocaleString()} · {s.message_count} message{s.message_count === 1 ? '' : 's'}
-                </p>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm text-slate-700 dark:text-slate-200 truncate ${collapsed ? 'text-center' : ''}`}>{collapsed ? '•••' : (s.title || 'New conversation')}</p>
+                {!collapsed && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  {formatColomboDateTime(s.last_message_at)} · {s.message_count} message{s.message_count === 1 ? '' : 's'}
+                </p>}
               </div>
-              <span
+              {!collapsed && <span
                 role="button"
                 onClick={(e) => { e.stopPropagation(); onDelete(s.session_id) }}
-                className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 p-1 flex-shrink-0 transition-all"
+                className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1 flex-shrink-0 transition-all"
                 title="Delete conversation"
               >
                 <TrashSVG />
-              </span>
+              </span>}
             </button>
           ))
         )}
       </div>
-    </div>
+      </aside>
+    </>
   )
 }
 
 function Message({ role, content, citations, streaming, onCitationClick }) {
   const [showCitations, setShowCitations] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function copyResponse() {
+    await navigator.clipboard?.writeText(content || '')
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
 
   return (
     <div className={`flex gap-3 animate-fade-in-up ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -151,7 +210,7 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
         </div>
       )}
 
-      <div className={`max-w-[75%] ${role === 'user' ? 'order-2' : ''}`}>
+      <div className={`min-w-0 ${role === 'user' ? 'order-2 max-w-[82%]' : 'max-w-[calc(100%_-_2.5rem)] flex-1'}`}>
         <div
           className={`rounded-2xl px-5 py-3.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
             role === 'user'
@@ -166,7 +225,7 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
             </span>
           ) : role === 'assistant' ? (
-            <div className="text-sm leading-relaxed text-slate-800 space-y-1">
+            <div className="min-w-0 max-w-full text-sm leading-relaxed text-slate-800 space-y-1 overflow-hidden">
               <MarkdownContent content={content} citations={citations} onCitationClick={onCitationClick} />
               {streaming && (
                 <span className="inline-block w-0.5 h-4 bg-slate-400 ml-0.5 align-middle animate-pulse rounded" />
@@ -178,6 +237,12 @@ function Message({ role, content, citations, streaming, onCitationClick }) {
             </>
           )}
         </div>
+
+        {role === 'assistant' && content && !streaming && (
+          <button onClick={copyResponse} className="mt-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            {copied ? 'Copied response' : 'Copy response'}
+          </button>
+        )}
 
         {/* Citations */}
         {citations?.length > 0 && (
@@ -244,9 +309,9 @@ export default function ChatPage() {
   const [activeCitation, setActiveCitation] = useState(null)
   const [sessions, setSessions] = useState([])
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyCollapsed, setHistoryCollapsed] = useState(false)
   const [chatContext, setChatContext] = useState(null)
   const abortRef = useRef(null)
-  const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const messagesContainerRef = useRef(null)
   // Tracks whether the user is (still) scrolled near the bottom — a ref rather
@@ -268,6 +333,12 @@ export default function ChatPage() {
       sessionStorage.setItem('chat_session_id', sessionId)
     }
   }, [sessionId])
+
+  useEffect(() => {
+    if (!inputRef.current) return
+    inputRef.current.style.height = 'auto'
+    inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 144)}px`
+  }, [input])
 
   // Load the tenant's org profiles once on mount, and auto-select the last
   // used one (if it still exists) so returning users skip the picker.
@@ -300,10 +371,9 @@ export default function ChatPage() {
 
   // Only auto-follow the stream if the user hasn't scrolled away from the
   // bottom — otherwise every streamed token would yank their view back down.
-  useEffect(() => {
-    if (stickToBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+  useLayoutEffect(() => {
+    const pane = messagesContainerRef.current
+    if (pane && stickToBottomRef.current) pane.scrollTop = pane.scrollHeight
   }, [messages])
 
   function handleMessagesScroll() {
@@ -346,7 +416,12 @@ export default function ChatPage() {
 
   async function refreshSessions() {
     try {
-      setSessions(await listSessions(profileId))
+      const authoritative = await listSessions(profileId)
+      setSessions(current => {
+        const ids = new Set(authoritative.map(session => session.session_id))
+        const pending = current.filter(session => session.optimistic && !ids.has(session.session_id))
+        return [...pending, ...authoritative]
+      })
     } catch (_) {
       // Non-fatal — history panel just stays empty
     }
@@ -362,6 +437,7 @@ export default function ChatPage() {
 
   async function loadSession(id) {
     abortRef.current?.abort()
+    stickToBottomRef.current = true
     setStreaming(false)
     setError('')
     try {
@@ -377,6 +453,7 @@ export default function ChatPage() {
   }
 
   async function handleDeleteSession(id) {
+    if (!window.confirm('Delete this conversation? This cannot be undone.')) return
     try {
       await deleteSession(id)
       setSessions(s => s.filter(x => x.session_id !== id))
@@ -390,6 +467,7 @@ export default function ChatPage() {
 
   function newChat() {
     abortRef.current?.abort()
+    stickToBottomRef.current = true
     setMessages([])
     setInput('')
     setStreaming(false)
@@ -399,9 +477,30 @@ export default function ChatPage() {
     initSession()
   }
 
+  function stopStreaming() {
+    abortRef.current?.abort()
+    setStreaming(false)
+    setMessages(current => current.map((message, index) => (
+      index === current.length - 1 ? { ...message, streaming: false } : message
+    )))
+  }
+
   function sendMessage(question) {
     if (!question.trim() || streaming || !sessionId) return
     setError('')
+    stickToBottomRef.current = true
+
+    const existingSession = sessions.some(session => session.session_id === sessionId)
+    if (!existingSession) {
+      setSessions(current => [{
+        session_id: sessionId,
+        profile_id: profileId,
+        title: question.trim(),
+        last_message_at: new Date().toISOString(),
+        message_count: 1,
+        optimistic: true,
+      }, ...current])
+    }
 
     const userMsg = { role: 'user', content: question }
     const assistantMsg = { role: 'assistant', content: '', citations: [], streaming: true }
@@ -436,6 +535,9 @@ export default function ChatPage() {
           copy[copy.length - 1] = { ...copy[copy.length - 1], streaming: false }
           return copy
         })
+        setSessions(current => current.map(session => session.session_id === sessionId
+          ? { ...session, message_count: Math.max(session.message_count || 0, 2), last_message_at: new Date().toISOString() }
+          : session))
         setStreaming(false)
         inputRef.current?.focus()
         refreshSessions()
@@ -443,6 +545,7 @@ export default function ChatPage() {
       },
       (errMsg) => {
         setError(errMsg)
+        if (!existingSession) setSessions(current => current.filter(session => session.session_id !== sessionId))
         setMessages(m => {
           const copy = [...m]
           copy[copy.length - 1] = { ...copy[copy.length - 1], streaming: false, content: '⚠ ' + errMsg }
@@ -514,23 +617,37 @@ export default function ChatPage() {
   const activeProfile = profiles.find(p => p.profile_id === profileId)
 
   return (
-    <div className="relative flex h-full overflow-hidden">
-      <div className="flex flex-col h-full flex-1 max-w-4xl mx-auto px-4 w-full transition-all duration-300">
+    <div className="relative flex h-full min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
+      <HistoryPanel
+        open={historyOpen}
+        collapsed={historyCollapsed}
+        sessions={sessions}
+        activeSessionId={sessionId}
+        onSelect={loadSession}
+        onDelete={handleDeleteSession}
+        onClose={() => setHistoryOpen(false)}
+        onCollapse={() => setHistoryCollapsed(value => !value)}
+        onNew={newChat}
+      />
+      <div className="flex min-h-0 min-w-0 flex-col h-full flex-1 w-full overflow-hidden">
         {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Compliance Chat</h1>
+      <div className="flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <button onClick={() => setHistoryOpen(true)} className="rounded-lg border border-slate-200 p-2 text-slate-600 lg:hidden" aria-label="Open conversation history"><HistorySVG /></button>
+          <div className="min-w-0">
+          <h1 className="truncate text-base font-bold text-slate-900">Compliance intelligence</h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Ask anything about your ISO 14001 compliance ·{' '}
+            Grounded in the latest gap analysis ·{' '}
             <button onClick={switchProfile} className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
-              {activeProfile?.org_name || 'Untitled Profile'} (switch)
+              {activeProfile?.org_name || 'Untitled Profile'}
             </button>
           </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setHistoryOpen(v => !v)}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors"
+            className="hidden items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition-colors"
           >
             <HistorySVG /> History
           </button>
@@ -544,12 +661,12 @@ export default function ChatPage() {
       </div>
 
       {chatContext && (
-        <div className={`mt-3 rounded-xl border px-4 py-3 text-xs ${
+        <div className={`mx-4 mt-3 rounded-xl border px-4 py-3 text-xs sm:mx-6 ${
           !chatContext.has_completed_analysis
-            ? 'border-amber-200 bg-amber-50 text-amber-800'
+            ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-200'
             : chatContext.stale
-              ? 'border-amber-200 bg-amber-50 text-amber-800'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-200'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200'
         }`}>
           {chatContext.has_completed_analysis ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -582,7 +699,7 @@ export default function ChatPage() {
       <div
         ref={messagesContainerRef}
         onScroll={handleMessagesScroll}
-        className="flex-1 overflow-y-auto py-5 scrollbar-thin flex flex-col"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 scrollbar-thin flex flex-col sm:px-6"
       >
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-5">
@@ -608,7 +725,7 @@ export default function ChatPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="mx-auto w-full max-w-4xl space-y-5">
             {messages.map((m, i) => (
               <Message
                 key={i}
@@ -626,13 +743,13 @@ export default function ChatPage() {
               </div>
             )}
 
-            <div ref={bottomRef} />
           </div>
         )}
       </div>
 
       {/* Input */}
-      <div className="border-t border-slate-200 pt-4">
+      <div className="border-t border-slate-200 bg-white px-4 pb-3 pt-3 sm:px-6">
+        <div className="mx-auto max-w-4xl">
         {!sessionId && !error && (
           <div className="flex items-center gap-2 mb-3 text-xs text-slate-400">
             <Spinner size="sm" /> Connecting to chat service…
@@ -651,28 +768,22 @@ export default function ChatPage() {
             style={{ maxHeight: '120px', overflowY: 'auto' }}
           />
           <button
-            onClick={() => sendMessage(input)}
-            disabled={streaming || !input.trim() || !sessionId}
-            className="flex-shrink-0 rounded-2xl bg-brand-600 px-4 py-3 text-white hover:bg-brand-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+            onClick={streaming ? stopStreaming : () => sendMessage(input)}
+            disabled={!streaming && (!input.trim() || !sessionId)}
+            aria-label={streaming ? 'Stop generating' : 'Send message'}
+            className={`flex-shrink-0 rounded-2xl px-4 py-3 text-white disabled:opacity-50 transition-colors flex items-center justify-center ${streaming ? 'bg-slate-800 hover:bg-slate-900' : 'bg-brand-600 hover:bg-brand-700'}`}
           >
-            {streaming ? <Spinner size="sm" /> : <SendSVG />}
+            {streaming ? <span className="h-3.5 w-3.5 rounded-sm bg-white" /> : <SendSVG />}
           </button>
         </div>
         <p className="text-xs text-slate-400 mt-3 text-center mb-2">
           Responses use your latest completed gap analysis. Always verify important decisions.
         </p>
+        </div>
       </div>
       </div>
       
-      <CitationPanel citation={activeCitation} onClose={() => setActiveCitation(null)} />
-      <HistoryPanel
-        open={historyOpen}
-        sessions={sessions}
-        activeSessionId={sessionId}
-        onSelect={loadSession}
-        onDelete={handleDeleteSession}
-        onClose={() => setHistoryOpen(false)}
-      />
+      <CitationPanel citation={activeCitation} profileId={profileId} onClose={() => setActiveCitation(null)} />
     </div>
   )
 }

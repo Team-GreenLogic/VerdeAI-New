@@ -168,7 +168,6 @@ async def chat(
     async def _generate():
         answer_parts: list[str] = []
         citations: list[dict] = []
-        done_yielded = False
         try:
             # Load history inside the generator so Redis errors surface as SSE errors
             history = await load_history(tenant_id, session_id, settings.CHAT_HISTORY_WINDOW)
@@ -179,14 +178,14 @@ async def chat(
                 if event["type"] == "citations":
                     citations = event.get("citations", [])
                 if event["type"] == "done":
-                    done_yielded = True
+                    # Delay the public completion signal until the turn has
+                    # been persisted, so clients can immediately refresh the
+                    # authoritative conversation list without racing Mongo.
+                    continue
                 yield {"data": json.dumps(event)}
         except Exception as exc:
             logger.error("Chat stream error", error=str(exc))
             yield {"data": json.dumps({"type": "error", "content": "An internal error occurred"})}
-        finally:
-            if not done_yielded:
-                yield {"data": json.dumps({"type": "done"})}
 
         # Persist turn: Redis (short-lived prompt-context window) + Mongo (durable, user-facing history)
         full_answer = "".join(answer_parts)
@@ -207,5 +206,7 @@ async def chat(
                 )
             except Exception as exc:
                 logger.warning("Failed to persist chat history to Mongo", error=str(exc))
+
+        yield {"data": json.dumps({"type": "done"})}
 
     return EventSourceResponse(_generate())

@@ -38,19 +38,31 @@ const components = {
       <li className="leading-relaxed">{children}</li>
     </InListContext.Provider>
   ),
-  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+  strong: ({ children }) => <strong className="font-semibold text-slate-900 dark:text-slate-100">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
   code: ({ inline, children }) => inline
-    ? <code className="bg-slate-100 text-slate-700 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
-    : <code className="block bg-slate-100 text-slate-700 rounded-lg p-3 text-xs font-mono overflow-x-auto my-1">{children}</code>,
+    ? <code className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
+    : <code className="block bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-200 rounded-lg p-3 text-xs font-mono overflow-x-auto my-1">{children}</code>,
   pre: ({ children }) => <pre className="my-1">{children}</pre>,
   blockquote: ({ children }) => <blockquote className="border-l-2 border-brand-400 pl-3 text-slate-600 my-1">{children}</blockquote>,
-  h1: ({ children }) => <h1 className="font-semibold text-base text-slate-900 my-1">{children}</h1>,
-  h2: ({ children }) => <h2 className="font-semibold text-sm text-slate-900 my-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="font-semibold text-sm text-slate-900 my-0.5">{children}</h3>,
-  table: ({ children }) => <table className="text-xs border-collapse my-1 w-full">{children}</table>,
-  th: ({ children }) => <th className="bg-slate-50 border border-slate-200 px-2 py-1 text-left font-semibold">{children}</th>,
-  td: ({ children }) => <td className="border border-slate-200 px-2 py-1">{children}</td>,
+  h1: ({ children }) => <h1 className="font-semibold text-base text-slate-900 dark:text-slate-100 my-1">{children}</h1>,
+  h2: ({ children }) => <h2 className="font-semibold text-sm text-slate-900 dark:text-slate-100 my-1">{children}</h2>,
+  h3: ({ children }) => <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100 my-0.5">{children}</h3>,
+  table: ({ children }) => (
+    <div className="my-2 max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      <table className="w-max min-w-full border-collapse text-xs whitespace-normal">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="min-w-28 max-w-72 bg-slate-50 dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-left align-top font-semibold break-words last:border-r-0">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="min-w-28 max-w-72 border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2 align-top break-words last:border-r-0">
+      {children}
+    </td>
+  ),
 }
 
 // Matches the citation format assistant replies actually use in practice:
@@ -62,6 +74,18 @@ const components = {
 // that one has no backing chunk to link to, so it's left as plain text.
 const CITATION_RE = /\[(?:doc:\s*)?([^,\]]+?)\s*,\s*p\.\s*(\d+)\s*\]/gi
 const ANALYSIS_CITATION_RE = /\[analysis:([^,\]]+),\s*clause\s+([^\]]+)\]/gi
+const SOURCE_CITATION_RE = /\[source:([^\]]+)\]/gi
+
+function citationLabel(citation) {
+  if (citation?.display_label) return citation.display_label
+  if (citation?.type === 'analysis') return `Clause ${citation.clause_id} · ${citation.decision}`
+  return `${citation?.filename || 'Document'} · p.${citation?.page ?? '?'}`
+}
+
+function citationMarkdown(citation, idx) {
+  const label = citationLabel(citation).replace(/([\\\[\]])/g, '\\$1')
+  return `[${label}](citation:${idx})`
+}
 
 // Rewrites each citation marker into a placeholder markdown link keyed by the
 // citation's index in `citations` (rather than embedding the raw filename in
@@ -70,20 +94,24 @@ const ANALYSIS_CITATION_RE = /\[analysis:([^,\]]+),\s*clause\s+([^\]]+)\]/gi
 // green badges instead of real links.
 function preprocessCitations(content, citations) {
   if (!citations?.length) return content
-  const withAnalysis = content.replace(ANALYSIS_CITATION_RE, (match, analysisId, clauseId) => {
+  const withSources = content.replace(SOURCE_CITATION_RE, (match, sourceKey) => {
+    const idx = citations.findIndex(c => String(c.source_key) === sourceKey.trim())
+    return idx >= 0 ? citationMarkdown(citations[idx], idx) : match
+  })
+  const withAnalysis = withSources.replace(ANALYSIS_CITATION_RE, (match, analysisId, clauseId) => {
     const idx = citations.findIndex(c =>
       c.type === 'analysis' &&
       String(c.analysis_id) === analysisId.trim() &&
       String(c.clause_id) === clauseId.trim()
     )
-    return `[cite](citation:${idx})`
+    return idx >= 0 ? citationMarkdown(citations[idx], idx) : match
   })
   return withAnalysis.replace(CITATION_RE, (match, filename, page) => {
     const idx = citations.findIndex(c =>
       c.filename?.trim().toLowerCase() === filename.trim().toLowerCase() &&
       String(c.page) === String(page)
     )
-    return `[cite](citation:${idx})`
+    return idx >= 0 ? citationMarkdown(citations[idx], idx) : match
   })
 }
 
@@ -98,13 +126,13 @@ function CitationLink({ href, citations, onCitationClick }) {
       title={citation ? (citation.type === 'analysis'
         ? `Analysis ${citation.analysis_id} — clause ${citation.clause_id}`
         : `${citation.filename} — p.${citation.page}`) : 'Citation unavailable'}
-      className={`inline-flex items-center gap-0.5 mx-0.5 -translate-y-px px-1.5 py-0.5 rounded text-[11px] font-semibold align-middle transition-colors ${
+      className={`inline-flex max-w-full items-center gap-1 mx-0.5 -translate-y-px px-2 py-0.5 rounded-md text-[11px] font-semibold align-middle transition-all ${
         citation
-          ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200 cursor-pointer'
+          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 hover:shadow-sm cursor-pointer'
           : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-default'
       }`}
     >
-      {citation ? (citation.type === 'analysis' ? `clause ${citation.clause_id}` : `p.${citation.page}`) : '?'}
+      <span className="truncate">{citation ? citationLabel(citation) : '?'}</span>
     </button>
   )
 }
@@ -128,5 +156,9 @@ export default function MarkdownContent({ content, className, citations, onCitat
       {processed}
     </ReactMarkdown>
   )
-  return className ? <div className={className}>{body}</div> : body
+  return (
+    <div className={`min-w-0 max-w-full whitespace-normal ${className || ''}`}>
+      {body}
+    </div>
+  )
 }

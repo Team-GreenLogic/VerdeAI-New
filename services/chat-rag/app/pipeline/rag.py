@@ -86,14 +86,17 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> tuple[str, list[d
     parts = []
     citations = []
     for i, c in enumerate(chunks, 1):
+        source_key = f"document-{i}"
         page = c.get("page", "?")
         filename = c.get("filename", "unknown")
         text = c.get("text", "")
         preamble = c.get("context_preamble", "")
         full_text = f"{preamble}\n\n{text}".strip() if preamble else text
-        parts.append(f"[Chunk {i} | {filename}, p.{page}]\n{full_text}")
+        parts.append(f"[Source {source_key} | {filename}, p.{page}]\n{full_text}")
         citations.append({
             "type": "document",
+            "source_key": source_key,
+            "display_label": f"{filename} · p.{page}",
             "chunk": i,
             "filename": filename,
             "page": page,
@@ -217,11 +220,14 @@ def _normalise_analysis_citations(
     metadata: dict[str, Any], detailed: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     citations: list[dict[str, Any]] = []
-    seen: set[tuple[Any, ...]] = set()
     for result in detailed:
         clause_id = str(result.get("clause_id", "?"))
+        safe_clause_id = re.sub(r"[^a-zA-Z0-9.-]+", "-", clause_id)
+        analysis_source_key = f"analysis-{safe_clause_id}"
         analysis_citation = {
             "type": "analysis",
+            "source_key": analysis_source_key,
+            "display_label": f"Clause {clause_id} · {result.get('decision', 'Unknown')}",
             "analysis_id": metadata["analysis_id"],
             "clause_id": clause_id,
             "decision": result.get("decision", "Unknown"),
@@ -230,15 +236,16 @@ def _normalise_analysis_citations(
             "text": result.get("reasoning", ""),
         }
         citations.append(analysis_citation)
+        document_number = 0
         for raw in result.get("citations", []):
             if raw.get("type") != "chunk" or not raw.get("filename"):
                 continue
-            key = (raw.get("filename"), str(raw.get("page")), clause_id)
-            if key in seen:
-                continue
-            seen.add(key)
+            document_number += 1
+            source_key = f"{analysis_source_key}-document-{document_number}"
             citations.append({
                 "type": "document",
+                "source_key": source_key,
+                "display_label": f"{raw.get('filename', 'unknown')} · p.{raw.get('page', '?')}",
                 "filename": raw.get("filename", "unknown"),
                 "page": raw.get("page", "?"),
                 "text": raw.get("text", ""),
@@ -296,8 +303,10 @@ async def _load_analysis_context(
     ]
     for result in detailed:
         clause_id = str(result.get("clause_id", "?"))
+        safe_clause_id = re.sub(r"[^a-zA-Z0-9.-]+", "-", clause_id)
+        analysis_source_key = f"analysis-{safe_clause_id}"
         lines += [
-            f"\n[Analysis {analysis_id} | Clause {clause_id}]",
+            f"\n[Source {analysis_source_key} | Analysis {analysis_id} | Clause {clause_id}]",
             f"Decision: {result.get('decision', 'Unknown')} | Confidence: {float(result.get('confidence', 0) or 0):.0%}",
             f"Reasoning: {result.get('reasoning', '')}",
             "Missing evidence: " + ("; ".join(str(g) for g in result.get("missing_evidence", [])) or "None recorded"),
@@ -316,8 +325,8 @@ async def _load_analysis_context(
         if persisted_citations:
             lines.append("Grounded evidence citations:")
             lines += [
-                f"- [doc:{c.get('filename')}, p.{c.get('page', '?')}]: {c.get('text', '')}"
-                for c in persisted_citations
+                f"- [Source {analysis_source_key}-document-{i} | {c.get('filename')}, p.{c.get('page', '?')}]: {c.get('text', '')}"
+                for i, c in enumerate(persisted_citations, 1)
             ]
         related_recs = [r for r in recs if str(r.get("clause_id", "")) == clause_id]
         if related_recs:

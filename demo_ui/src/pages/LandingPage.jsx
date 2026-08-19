@@ -24,7 +24,7 @@ const PlayIcon = ({ className = "w-5 h-5" }) => (
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen relative bg-[#FDFDFD] overflow-hidden selection:bg-brand-200">
+    <div className="min-h-dvh relative bg-[#FDFDFD] overflow-hidden selection:bg-brand-200 dark:bg-slate-950 dark:text-slate-100">
       
       {/* Premium Generated Background Image */}
       <div 

@@ -99,4 +99,6 @@ async def decode_token(token: str) -> Principal:
         tenant_id=tenant_id,
         email=email,
         roles=roles,
+        first_name=payload.get("given_name"),
+        last_name=payload.get("family_name"),
     )

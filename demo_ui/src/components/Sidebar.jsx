@@ -75,7 +75,7 @@ export default function Sidebar({ isOpen, onClose }) {
     <>
       {/* Sidebar */}
       <aside
-        className={`flex flex-col h-screen w-64 bg-white border-r border-gray-200 flex-shrink-0 transition-transform duration-300
+        className={`flex h-full flex-col w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex-shrink-0 transition-transform duration-300
           ${isOpen ? 'fixed inset-y-0 left-0 z-50 translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0 md:static md:flex'}`}
       >
         {/* Brand header */}

@@ -4,7 +4,12 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.pipeline.rag import _select_detailed_results, load_chat_context
+from app.pipeline.rag import (
+    _format_chunks_for_prompt,
+    _normalise_analysis_citations,
+    _select_detailed_results,
+    load_chat_context,
+)
 
 
 class FakeCollection:
@@ -91,3 +96,36 @@ def test_broad_question_prioritizes_stored_gap_severity_and_impact():
     selected = _select_detailed_results("What are our biggest gaps?", results, recs, [])
 
     assert [item["clause_id"] for item in selected][:2] == ["6.1.2", "7.2"]
+
+
+def test_retrieved_documents_receive_stable_source_keys_and_labels():
+    prompt, citations = _format_chunks_for_prompt([
+        {"filename": "aspects-register.pdf", "page": 4, "text": "Register excerpt"},
+    ])
+
+    assert "[Source document-1 | aspects-register.pdf, p.4]" in prompt
+    assert citations[0]["source_key"] == "document-1"
+    assert citations[0]["display_label"] == "aspects-register.pdf · p.4"
+
+
+def test_analysis_and_its_evidence_receive_distinct_source_keys():
+    citations = _normalise_analysis_citations(
+        {"analysis_id": "analysis-1", "version_id": "iso-14001-2015"},
+        [{
+            "clause_id": "6.1.2",
+            "decision": "Not Met",
+            "reasoning": "The aspects register is incomplete.",
+            "citations": [{
+                "type": "chunk",
+                "filename": "aspects-register.pdf",
+                "page": 4,
+                "text": "Register excerpt",
+            }],
+        }],
+    )
+
+    assert [citation["source_key"] for citation in citations] == [
+        "analysis-6.1.2",
+        "analysis-6.1.2-document-1",
+    ]
+    assert citations[0]["display_label"] == "Clause 6.1.2 · Not Met"

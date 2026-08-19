@@ -26,16 +26,23 @@ class MeResponse(BaseModel):
     email: str
     tenant_id: str
     roles: list[str]
+    first_name: str | None = None
+    last_name: str | None = None
+    display_name: str | None = None
 
 
 @router.get("/me", response_model=MeResponse)
 async def me(principal: CurrentPrincipal) -> MeResponse:
     """Return the current user's identity and roles (including server-injected admin role)."""
+    display_name = " ".join(filter(None, [principal.first_name, principal.last_name])).strip() or None
     return MeResponse(
         sub=principal.sub,
         email=principal.email,
         tenant_id=principal.tenant_id,
         roles=principal.roles,
+        first_name=principal.first_name,
+        last_name=principal.last_name,
+        display_name=display_name,
     )
 
 
