@@ -943,7 +943,7 @@ function BuildTab({ vid, version, onVersionUpdated }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-const TABS = ['Clauses', 'Template', 'Build']
+const TABS = ['Clauses', 'Build']
 
 export default function AdminVersionDetailPage() {
   const { vid } = useParams()
