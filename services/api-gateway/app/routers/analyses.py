@@ -212,6 +212,7 @@ async def create_analysis(
         "version_id": version_id,
         "status": "pending",
         "gap_count": None,
+        "recommendation_status": "pending",
         "created_at": now,
     })
 
@@ -340,6 +341,9 @@ async def delete_analysis(
     await db.result_store.delete_many({"analysis_id": analysis_id, "tenant_id": tenant_id})
     await db.recommendation_store.delete_many({"analysis_id": analysis_id, "tenant_id": tenant_id})
     await db.missing_request_store.delete_many({"analysis_id": analysis_id, "tenant_id": tenant_id})
+    await db.personalized_recommendation_runs.delete_many(
+        {"analysis_id": analysis_id, "tenant_id": tenant_id}
+    )
 
     logger.info("Analysis deleted", analysis_id=analysis_id, tenant_id=tenant_id)
     return {"analysis_id": analysis_id, "status": "deleted"}
@@ -422,6 +426,7 @@ async def reanalyze_delta(
         "version_id": version_id,
         "status": "pending",
         "gap_count": None,
+        "recommendation_status": "pending",
         "created_at": now,
         "mode": "delta",
         "parent_analysis_id": analysis_id,

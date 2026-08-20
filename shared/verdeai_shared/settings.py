@@ -73,6 +73,17 @@ class Settings(BaseSettings):
     # --- Service URLs ---
     CHAT_RAG_URL: str = "http://chat-rag:8001"
 
+    # --- Web-grounded recommendation research ---
+    OPENSERP_BASE_URL: str = "http://openserp:7000"
+    OPENSERP_ENGINES: str = "bing,google"
+    OPENSERP_FALLBACK_ENGINES: str = "duckduckgo,yandex"
+    RESEARCH_MAX_ITERATIONS: int = 3
+    RESEARCH_MAX_QUERIES: int = 8
+    RESEARCH_MAX_PAGES: int = 15
+    RESEARCH_MAX_PAGES_PER_DOMAIN: int = 2
+    RESEARCH_RUN_TIMEOUT_SECONDS: int = 300
+    RESEARCH_HTTP_TIMEOUT_SECONDS: int = 30
+
     # --- Admin ---
     ADMIN_EMAILS: str = ""  # comma-separated emails that auto-receive the admin role
 

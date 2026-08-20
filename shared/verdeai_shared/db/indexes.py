@@ -15,6 +15,49 @@ _SUMMARY_FIELD_PATHS = {
     "leadership_roles": "org.leadership_roles",
 }
 _BACKFILL_MIGRATION_ID = "org_profiles_backfill_v1"
+_ACTIVE_RECOMMENDATION_INDEX = "uniq_personalized_active_profile"
+_LEGACY_ACTIVE_RECOMMENDATION_INDEX = "tenant_id_1_active_profile_key_1"
+
+
+async def _ensure_personalized_recommendation_indexes(
+    db: AsyncIOMotorDatabase,  # type: ignore[type-arg]
+) -> None:
+    """Create run indexes and migrate the legacy compound sparse index.
+
+    A compound sparse index containing ``tenant_id`` still indexes terminal
+    documents after ``active_profile_key`` is removed because ``tenant_id`` is
+    present. Under a unique constraint that permits only one terminal run per
+    tenant. A partial index limits uniqueness to genuinely active string keys.
+    """
+    collection = db.personalized_recommendation_runs
+    indexes = await collection.index_information()
+
+    if _LEGACY_ACTIVE_RECOMMENDATION_INDEX in indexes:
+        await collection.drop_index(_LEGACY_ACTIVE_RECOMMENDATION_INDEX)
+
+    desired = indexes.get(_ACTIVE_RECOMMENDATION_INDEX)
+    desired_filter = {"active_profile_key": {"$type": "string"}}
+    if desired and (
+        not desired.get("unique")
+        or desired.get("partialFilterExpression") != desired_filter
+    ):
+        await collection.drop_index(_ACTIVE_RECOMMENDATION_INDEX)
+
+    await collection.create_indexes([
+        IndexModel([("tenant_id", ASCENDING), ("run_id", ASCENDING)], unique=True),
+        IndexModel([
+            ("tenant_id", ASCENDING),
+            ("profile_id", ASCENDING),
+            ("created_at", ASCENDING),
+        ]),
+        IndexModel([("tenant_id", ASCENDING), ("analysis_id", ASCENDING)]),
+        IndexModel(
+            [("tenant_id", ASCENDING), ("active_profile_key", ASCENDING)],
+            name=_ACTIVE_RECOMMENDATION_INDEX,
+            unique=True,
+            partialFilterExpression=desired_filter,
+        ),
+    ])
 
 
 async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -126,6 +169,9 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type
     await db.recommendation_store.create_indexes([
         IndexModel([("analysis_id", ASCENDING), ("priority", ASCENDING)]),
     ])
+
+    # Immutable web-grounded personalized recommendation runs.
+    await _ensure_personalized_recommendation_indexes(db)
 
     # missing_request_store
     await db.missing_request_store.create_indexes([

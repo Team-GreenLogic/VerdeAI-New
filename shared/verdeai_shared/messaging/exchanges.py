@@ -1,6 +1,5 @@
 """Exchange and quorum queue declarations."""
 
-import aio_pika
 from aio_pika import Channel, ExchangeType
 
 _QUORUM = {"x-queue-type": "quorum"}
@@ -72,6 +71,13 @@ async def declare_topology(channel: Channel) -> None:
         arguments={**_QUORUM_WITH_DLX, "x-dead-letter-exchange": "analyses.dlx"},
     )
     await ana_missing_q.bind(ana_ex, routing_key="analysis.gaps.ready")
+
+    personalized_q = await channel.declare_queue(
+        "recommendations.personalize",
+        durable=True,
+        arguments={**_QUORUM_WITH_DLX, "x-dead-letter-exchange": "analyses.dlx"},
+    )
+    await personalized_q.bind(ana_ex, routing_key="recommendation.personalized.requested")
 
     ana_dlq = await channel.declare_queue(
         "analyses.dlq", durable=True, arguments=_QUORUM

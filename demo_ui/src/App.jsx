@@ -14,6 +14,8 @@ import AnalysesProfilePickerPage from './pages/AnalysesProfilePickerPage.jsx'
 import AnalysisListPage from './pages/AnalysisListPage.jsx'
 import AnalysisDetailPage from './pages/AnalysisDetailPage.jsx'
 import ChatPage from './pages/ChatPage.jsx'
+import RecommendationsProfilePickerPage from './pages/RecommendationsProfilePickerPage.jsx'
+import RecommendationsPage from './pages/RecommendationsPage.jsx'
 import AdminVersionsPage from './pages/AdminVersionsPage.jsx'
 import AdminVersionDetailPage from './pages/AdminVersionDetailPage.jsx'
 
@@ -63,6 +65,14 @@ function AppRoutes() {
         element={<ProtectedRoute><Layout><AnalysisDetailPage /></Layout></ProtectedRoute>}
       />
       <Route
+        path="/recommendations"
+        element={<ProtectedRoute><Layout><RecommendationsProfilePickerPage /></Layout></ProtectedRoute>}
+      />
+      <Route
+        path="/recommendations/:profileId"
+        element={<ProtectedRoute><Layout><RecommendationsPage /></Layout></ProtectedRoute>}
+      />
+      <Route
         path="/chat"
         element={<ProtectedRoute><Layout><ChatPage /></Layout></ProtectedRoute>}
       />
@@ -93,4 +103,3 @@ export default function App() {
     </AuthProvider>
   )
 }
-

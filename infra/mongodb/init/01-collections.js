@@ -25,6 +25,7 @@ const collections = [
   "state_store",
   "result_store",
   "recommendation_store",
+  "personalized_recommendation_runs",
   "missing_request_store",
   "analyses",
   "chat_history",
@@ -74,6 +75,20 @@ db.result_store.createIndex(
 
 // recommendation_store
 db.recommendation_store.createIndex({ analysis_id: 1, priority: 1 }, { background: true });
+
+// personalized_recommendation_runs
+db.personalized_recommendation_runs.createIndex(
+  { tenant_id: 1, run_id: 1 },
+  { unique: true, background: true }
+);
+db.personalized_recommendation_runs.createIndex(
+  { tenant_id: 1, profile_id: 1, created_at: 1 },
+  { background: true }
+);
+db.personalized_recommendation_runs.createIndex(
+  { tenant_id: 1, active_profile_key: 1 },
+  { unique: true, sparse: true, background: true }
+);
 
 // missing_request_store
 db.missing_request_store.createIndex({ analysis_id: 1 }, { background: true });

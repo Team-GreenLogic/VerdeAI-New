@@ -41,6 +41,15 @@ const NAV = [
     ),
   },
   {
+    to: '/recommendations',
+    label: 'Recommendation',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.674M12 3a6 6 0 00-3.6 10.8c.73.548 1.1 1.173 1.1 1.867V16h5v-.333c0-.694.37-1.319 1.1-1.867A6 6 0 0012 3zM10 21h4" />
+      </svg>
+    ),
+  },
+  {
     to: '/chat',
     label: 'Chat',
     icon: (

@@ -76,6 +76,15 @@ class AnalysisRecommendationsReady(BaseModel):
     analysis_id: str
 
 
+class PersonalizedRecommendationRequested(BaseModel):
+    schema_version: int = 1
+    event_id: str = Field(default_factory=_new_event_id)
+    tenant_id: str
+    profile_id: str
+    analysis_id: str
+    run_id: str
+
+
 class AnalysisCompleted(BaseModel):
     schema_version: int = 1
     event_id: str = Field(default_factory=_new_event_id)
@@ -91,4 +100,3 @@ class IsoVersionBuildRequested(BaseModel):
     tenant_id: str = ""
     source_docs: list[dict[str, str]]  # [{gridfs_id, filename}]
     requested_by: str  # admin email
-

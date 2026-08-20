@@ -7,11 +7,13 @@ import { useTheme } from '../context/ThemeContext.jsx'
 const PAGE_LABELS = {
   '/dashboard': 'Dashboard', '/documents': 'Documents', '/org-profiles': 'Org Profiles',
   '/analyses': 'Gap Analysis', '/chat': 'Compliance Chat',
+  '/recommendations': 'Recommendations',
 }
 
 function getPageLabel(pathname) {
   if (/^\/analyses\/[^/]+\/[^/]+/.test(pathname)) return 'Analysis Detail'
   if (/^\/analyses\/[^/]+/.test(pathname)) return 'Gap Analysis'
+  if (/^\/recommendations\/[^/]+/.test(pathname)) return 'Recommendations'
   if (/^\/documents\/[^/]+/.test(pathname)) return 'Documents'
   if (/^\/org-profiles\/[^/]+/.test(pathname)) return 'Org Profile'
   if (/^\/admin\/versions\/[^/]+/.test(pathname)) return 'ISO Version Detail'
@@ -137,4 +139,3 @@ export default function Layout({ children }) {
     </div>
   )
 }
-

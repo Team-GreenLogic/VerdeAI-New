@@ -127,6 +127,17 @@
       }
     },
     {
+      "name": "recommendations.personalize",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "analyses.dlx"
+      }
+    },
+    {
       "name": "analyses.dlq",
       "vhost": "/",
       "durable": true,
@@ -196,6 +207,14 @@
       "destination": "analyses.dlq",
       "destination_type": "queue",
       "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "analyses",
+      "vhost": "/",
+      "destination": "recommendations.personalize",
+      "destination_type": "queue",
+      "routing_key": "recommendation.personalized.requested",
       "arguments": {}
     },
     {
